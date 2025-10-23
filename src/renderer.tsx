@@ -8,6 +8,8 @@ type CommandResult = KubectlResult & {
   completedAt: Date;
 };
 
+const kubeAPI = window.kube;
+
 function App() {
   const [contexts, setContexts] = useState<KubeContext[]>([]);
   const [currentContext, setCurrentContext] = useState<string | null>(null);
@@ -37,10 +39,18 @@ function App() {
     }, []);
 
   const refreshContexts = useCallback(async () => {
+    if (!kubeAPI) {
+      setLoadState('error');
+      setLoadError(
+        'Renderer bridge unavailable. Ensure the preload script is configured and contextIsolation remains enabled.'
+      );
+      return;
+    }
+
     setLoadState('loading');
     setLoadError(null);
     try {
-      const summary = await window.kube.getContexts();
+      const summary = await kubeAPI.getContexts();
       applySummary(summary);
       setLoadState('idle');
     } catch (error) {
@@ -59,7 +69,10 @@ function App() {
       setSelectedContext(nextContext);
       setRunError(null);
       try {
-        const summary = await window.kube.setContext(nextContext);
+        if (!kubeAPI) {
+          throw new Error('Renderer bridge unavailable.');
+        }
+        const summary = await kubeAPI.setContext(nextContext);
         applySummary(summary);
       } catch (error) {
         const message =
@@ -86,7 +99,10 @@ function App() {
     setRunError(null);
     setResult(null);
     try {
-      const runResult = await window.kube.runCommand(selectedContext, command);
+      if (!kubeAPI) {
+        throw new Error('Renderer bridge unavailable.');
+      }
+      const runResult = await kubeAPI.runCommand(selectedContext, command);
       setResult({
         ...runResult,
         completedAt: new Date(),
@@ -105,6 +121,20 @@ function App() {
   }, [contexts, selectedContext]);
 
   const disabled = contexts.length === 0 || loadState === 'loading';
+
+  if (!kubeAPI) {
+    return (
+      <div style={styles.container}>
+        <header style={styles.header}>
+          <h1 style={styles.title}>Kubernetes CLI Manager</h1>
+        </header>
+        <p style={styles.error}>
+          Unable to reach Electron preload bridge. Double-check the application
+          configuration (`preload.ts`) and restart the app.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>

@@ -151,7 +151,15 @@ async function executeKubectl(args: string[]): Promise<KubectlResult> {
       stderr += chunk.toString();
     });
 
-    child.once('error', (error) => {
+    child.once('error', (error: NodeJS.ErrnoException) => {
+      if (error?.code === 'ENOENT') {
+        reject(
+          new Error(
+            'kubectl executable not found. Install kubectl or add it to your PATH.'
+          )
+        );
+        return;
+      }
       reject(error);
     });
 
