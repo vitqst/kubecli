@@ -1,6 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KubeConfigSummary, KubectlResult, KubeContext } from './common/kubeTypes';
+import { ErrorBoundary } from './components/ErrorBoundary';
+
+// Fix for webpack asset relocator __dirname issue in renderer
+declare global {
+  var __dirname: string;
+}
+if (typeof __dirname === 'undefined') {
+  (globalThis as any).__dirname = '';
+}
 
 type LoadState = 'idle' | 'loading' | 'error';
 
@@ -11,6 +20,8 @@ type CommandResult = KubectlResult & {
 const kubeAPI = window.kube;
 
 function App() {
+  console.log('[App] Component rendering...');
+  
   const [contexts, setContexts] = useState<KubeContext[]>([]);
   const [currentContext, setCurrentContext] = useState<string | null>(null);
   const [selectedContext, setSelectedContext] = useState<string>('');
@@ -366,12 +377,52 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-const container = document.getElementById('root');
+function initializeApp() {
+  console.log('[Renderer] Initializing app...');
+  
+  const container = document.getElementById('root');
 
-if (!container) {
-  throw new Error('Root container element not found');
+  if (!container) {
+    console.error('[Renderer] Root container element not found!');
+    throw new Error('Root container element not found');
+  }
+
+  console.log('[Renderer] Root container found, creating React root...');
+  const root = createRoot(container);
+
+  console.log('[Renderer] Rendering App component...');
+  root.render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+  
+  console.log('[Renderer] App component rendered successfully');
 }
 
-const root = createRoot(container);
+// Global error handlers
+window.addEventListener('error', (event) => {
+  console.error('[Global Error Handler] Uncaught error:', {
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+    error: event.error,
+  });
+});
 
-root.render(<App />);
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('[Global Error Handler] Unhandled promise rejection:', {
+    reason: event.reason,
+    promise: event.promise,
+  });
+});
+
+// Wait for DOM to be ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+  initializeApp();
+}

@@ -35,6 +35,43 @@ function createWindow() {
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
   mainWindow.webContents.openDevTools();
+
+  // Capture renderer console output and errors
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const prefix = '[Renderer Console]';
+    const location = sourceId ? ` (${sourceId}:${line})` : '';
+    
+    switch (level) {
+      case 0: // log
+        console.log(`${prefix} ${message}${location}`);
+        break;
+      case 1: // warning
+        console.warn(`${prefix} ⚠️  ${message}${location}`);
+        break;
+      case 2: // error
+        console.error(`${prefix} ❌ ${message}${location}`);
+        break;
+      case 3: // debug
+        console.debug(`${prefix} 🐛 ${message}${location}`);
+        break;
+      default:
+        console.log(`${prefix} ${message}${location}`);
+    }
+  });
+
+  // Capture page load errors
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('[Main Process] ❌ Page failed to load:', {
+      errorCode,
+      errorDescription,
+      url: validatedURL,
+    });
+  });
+
+  // Capture renderer crashes
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.error('[Main Process] ❌ Renderer process crashed:', details);
+  });
 }
 
 function registerIpcHandlers() {

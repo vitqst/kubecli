@@ -8,13 +8,6 @@ module.exports = {
   plugins,
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css'],
-    fallback: {
-      path: false,
-      fs: false,
-    },
   },
-  target: 'web',
-  externals: {
-    electron: 'commonjs electron',
-  },
+  target: 'electron-preload',
 };

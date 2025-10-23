@@ -14,6 +14,8 @@ const rules = [
       loader: '@vercel/webpack-asset-relocator-loader',
       options: {
         outputAssetBase: 'native_modules',
+        wrapperCompatibility: true,
+        escapeNonAnalyzableRequires: true,
       },
     },
   },
