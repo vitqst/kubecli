@@ -56,7 +56,7 @@ export function TerminalSidebar({
   const [searchDeployments, setSearchDeployments] = useState('');
   const [searchCronJobs, setSearchCronJobs] = useState('');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    pods: true,
+    pods: false,
     deployments: false,
     cronjobs: false,
   });
@@ -176,26 +176,34 @@ export function TerminalSidebar({
     }
   }, [selectedContext]);
 
-  // Load pods only on first expand or when context/namespace changes
+  // Preload all resources in background when context/namespace is ready
   useEffect(() => {
-    if (selectedContext && selectedNamespace && expandedSections.pods && !loadedSections.pods) {
-      void loadPods();
-    }
-  }, [selectedContext, selectedNamespace, expandedSections.pods, loadedSections.pods, loadPods]);
-
-  // Load deployments only on first expand or when context/namespace changes
-  useEffect(() => {
-    if (selectedContext && selectedNamespace && expandedSections.deployments && !loadedSections.deployments) {
-      void loadDeployments();
-    }
-  }, [selectedContext, selectedNamespace, expandedSections.deployments, loadedSections.deployments, loadDeployments]);
-
-  // Load cronjobs only on first expand or when context changes
-  useEffect(() => {
-    if (selectedContext && expandedSections.cronjobs && !loadedSections.cronjobs) {
-      void loadCronJobs();
-    }
-  }, [selectedContext, expandedSections.cronjobs, loadedSections.cronjobs, loadCronJobs]);
+    if (!selectedContext || !selectedNamespace) return;
+    
+    // Small delay to let terminal initialize first
+    const timer = setTimeout(() => {
+      // Load pods in background
+      if (!loadedSections.pods) {
+        void loadPods();
+      }
+      
+      // Load deployments in background (stagger by 500ms)
+      setTimeout(() => {
+        if (!loadedSections.deployments) {
+          void loadDeployments();
+        }
+      }, 500);
+      
+      // Load cronjobs in background (stagger by 1000ms)
+      setTimeout(() => {
+        if (!loadedSections.cronjobs) {
+          void loadCronJobs();
+        }
+      }, 1000);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [selectedContext, selectedNamespace, loadedSections.pods, loadedSections.deployments, loadedSections.cronjobs, loadPods, loadDeployments, loadCronJobs]);
 
   // Reset loaded state when context or namespace changes
   useEffect(() => {
