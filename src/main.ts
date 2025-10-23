@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { loadKubeConfig, runKubectlCommand, useContext, setKubeconfigPath } from './main/kube';
+import { terminalManager } from './main/terminal';
 import type { KubeConfigSummary, KubectlResult } from './common/kubeTypes';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
@@ -35,6 +36,9 @@ function createWindow() {
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
   mainWindow.webContents.openDevTools();
+
+  // Set terminal manager window reference
+  terminalManager.setWindow(mainWindow);
 
   // Capture renderer console output and errors
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -143,12 +147,56 @@ function registerIpcHandlers() {
       return err(message);
     }
   });
+
+  // Terminal IPC handlers
+  ipcMain.handle('terminal:create', async (_event, id: string, options?: { cwd?: string; env?: Record<string, string> }) => {
+    try {
+      terminalManager.createTerminal(id, options || {});
+      return ok({ id });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to create terminal';
+      return err(message);
+    }
+  });
+
+  ipcMain.handle('terminal:write', async (_event, id: string, data: string) => {
+    try {
+      terminalManager.writeToTerminal(id, data);
+      return ok({});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to write to terminal';
+      return err(message);
+    }
+  });
+
+  ipcMain.handle('terminal:resize', async (_event, id: string, cols: number, rows: number) => {
+    try {
+      terminalManager.resizeTerminal(id, cols, rows);
+      return ok({});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to resize terminal';
+      return err(message);
+    }
+  });
+
+  ipcMain.handle('terminal:close', async (_event, id: string) => {
+    try {
+      terminalManager.closeTerminal(id);
+      return ok({});
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to close terminal';
+      return err(message);
+    }
+  });
 }
 
 app.on('ready', createWindow);
 app.whenReady().then(registerIpcHandlers);
 
 app.on('window-all-closed', () => {
+  // Clean up all terminals
+  terminalManager.closeAllTerminals();
+  
   if (process.platform !== 'darwin') {
     app.quit();
   }

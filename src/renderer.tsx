@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KubeConfigSummary, KubectlResult, KubeContext, KubeConfigFile } from './common/kubeTypes';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Terminal } from './components/Terminal';
 
 // Fix for webpack asset relocator __dirname issue in renderer
 declare global {
@@ -33,6 +34,7 @@ function App() {
   const [runError, setRunError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [result, setResult] = useState<CommandResult | null>(null);
+  const [showTerminal, setShowTerminal] = useState<boolean>(false);
 
   const applySummary = useCallback((summary: KubeConfigSummary) => {
       setContexts(summary.contexts);
@@ -178,7 +180,20 @@ function App() {
         {kubeconfigPath && (
           <span style={styles.path}>Config: {kubeconfigPath}</span>
         )}
+        <button
+          onClick={() => setShowTerminal(!showTerminal)}
+          style={styles.toggleButton}
+        >
+          {showTerminal ? 'Show Command UI' : 'Show Terminal'}
+        </button>
       </header>
+
+      {showTerminal ? (
+        <div style={styles.terminalContainer}>
+          <Terminal id="main" />
+        </div>
+      ) : (
+        <div style={styles.oldUIContainer}>
 
       <section style={styles.section}>
         <h2 style={styles.subtitle}>Kubeconfig & Context</h2>
@@ -313,6 +328,8 @@ function App() {
           <p style={styles.placeholder}>Command output will appear here.</p>
         )}
       </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -421,6 +438,23 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#c81e1e',
     marginTop: '8px',
   },
+  toggleButton: {
+    padding: '8px 16px',
+    backgroundColor: '#2472c8',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+  },
+  terminalContainer: {
+    flex: 1,
+    height: 'calc(100vh - 100px)',
+    backgroundColor: '#1e1e1e',
+  },
+  oldUIContainer: {
+    flex: 1,
+  },
 };
 
 function initializeApp() {
@@ -438,11 +472,9 @@ function initializeApp() {
 
   console.log('[Renderer] Rendering App component...');
   root.render(
-    <React.StrictMode>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
-    </React.StrictMode>
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   );
   
   console.log('[Renderer] App component rendered successfully');

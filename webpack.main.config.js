@@ -11,6 +11,9 @@ module.exports = {
   resolve: {
     extensions: ['.js', '.ts', '.jsx', '.tsx', '.css', '.json'],
   },
+  externals: {
+    'node-pty': 'commonjs node-pty',
+  },
   output: {
     path: path.resolve(__dirname, '.webpack/main'),
   },

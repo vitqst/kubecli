@@ -44,3 +44,34 @@ contextBridge.exposeInMainWorld('kube', {
     return unwrap(response);
   },
 });
+
+contextBridge.exposeInMainWorld('terminal', {
+  create: async (id: string, options?: { cwd?: string; env?: Record<string, string> }): Promise<{ id: string }> => {
+    const response = await ipcRenderer.invoke('terminal:create', id, options);
+    return unwrap(response);
+  },
+  write: async (id: string, data: string): Promise<void> => {
+    const response = await ipcRenderer.invoke('terminal:write', id, data);
+    unwrap(response);
+  },
+  resize: async (id: string, cols: number, rows: number): Promise<void> => {
+    const response = await ipcRenderer.invoke('terminal:resize', id, cols, rows);
+    unwrap(response);
+  },
+  close: async (id: string): Promise<void> => {
+    const response = await ipcRenderer.invoke('terminal:close', id);
+    unwrap(response);
+  },
+  onData: (callback: (id: string, data: string) => void) => {
+    const handler = (_event: any, id: string, data: string) => callback(id, data);
+    ipcRenderer.on('terminal:data', handler);
+    // Return cleanup function
+    return () => ipcRenderer.removeListener('terminal:data', handler);
+  },
+  onExit: (callback: (id: string, exitCode: number, signal?: number) => void) => {
+    const handler = (_event: any, id: string, exitCode: number, signal?: number) => callback(id, exitCode, signal);
+    ipcRenderer.on('terminal:exit', handler);
+    // Return cleanup function
+    return () => ipcRenderer.removeListener('terminal:exit', handler);
+  },
+});
