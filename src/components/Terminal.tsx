@@ -92,11 +92,129 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
 
     // Handle user input
     xterm.onData((data) => {
-      if (window.terminal) {
+      if (window.terminal && isMountedRef.current) {
         window.terminal.write(id, data).catch((error) => {
           console.error(`[Terminal ${id}] Failed to write:`, error);
         });
       }
+    });
+
+    // Handle keyboard shortcuts for copy/paste
+    xterm.attachCustomKeyEventHandler((event) => {
+      // Ctrl+C or Cmd+C - Copy when text is selected
+      if ((event.ctrlKey || event.metaKey) && event.key === 'c') {
+        const selection = xterm.getSelection();
+        if (selection) {
+          navigator.clipboard.writeText(selection);
+          return false; // Prevent default
+        }
+        // If no selection, let Ctrl+C send SIGINT to terminal
+        return true;
+      }
+      
+      // Ctrl+V or Cmd+V - Paste
+      if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+        event.preventDefault();
+        navigator.clipboard.readText().then((text) => {
+          if (window.terminal && isMountedRef.current) {
+            window.terminal.write(id, text);
+          }
+        }).catch((err) => {
+          console.error('Failed to read clipboard:', err);
+        });
+        return false;
+      }
+      
+      return true; // Allow other keys
+    });
+
+    // Handle right-click context menu for copy/paste
+    terminalRef.current.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      
+      const selection = xterm.getSelection();
+      
+      // Create context menu
+      const menu = document.createElement('div');
+      menu.style.position = 'fixed';
+      menu.style.left = `${e.clientX}px`;
+      menu.style.top = `${e.clientY}px`;
+      menu.style.backgroundColor = '#2d2d30';
+      menu.style.border = '1px solid #454545';
+      menu.style.borderRadius = '4px';
+      menu.style.padding = '4px 0';
+      menu.style.zIndex = '10000';
+      menu.style.minWidth = '150px';
+      menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+      
+      // Copy option (only if text is selected)
+      if (selection) {
+        const copyItem = document.createElement('div');
+        copyItem.textContent = 'Copy';
+        copyItem.style.padding = '6px 12px';
+        copyItem.style.cursor = 'pointer';
+        copyItem.style.color = '#cccccc';
+        copyItem.style.fontSize = '13px';
+        copyItem.onmouseover = () => copyItem.style.backgroundColor = '#094771';
+        copyItem.onmouseout = () => copyItem.style.backgroundColor = 'transparent';
+        copyItem.onclick = () => {
+          navigator.clipboard.writeText(selection);
+          document.body.removeChild(menu);
+        };
+        menu.appendChild(copyItem);
+      }
+      
+      // Paste option
+      const pasteItem = document.createElement('div');
+      pasteItem.textContent = 'Paste';
+      pasteItem.style.padding = '6px 12px';
+      pasteItem.style.cursor = 'pointer';
+      pasteItem.style.color = '#cccccc';
+      pasteItem.style.fontSize = '13px';
+      pasteItem.onmouseover = () => pasteItem.style.backgroundColor = '#094771';
+      pasteItem.onmouseout = () => pasteItem.style.backgroundColor = 'transparent';
+      pasteItem.onclick = async () => {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (window.terminal && isMountedRef.current) {
+            window.terminal.write(id, text);
+          }
+        } catch (err) {
+          console.error('Failed to read clipboard:', err);
+        }
+        document.body.removeChild(menu);
+      };
+      menu.appendChild(pasteItem);
+      
+      // Clear selection option (only if text is selected)
+      if (selection) {
+        const clearItem = document.createElement('div');
+        clearItem.textContent = 'Clear Selection';
+        clearItem.style.padding = '6px 12px';
+        clearItem.style.cursor = 'pointer';
+        clearItem.style.color = '#cccccc';
+        clearItem.style.fontSize = '13px';
+        clearItem.onmouseover = () => clearItem.style.backgroundColor = '#094771';
+        clearItem.onmouseout = () => clearItem.style.backgroundColor = 'transparent';
+        clearItem.onclick = () => {
+          xterm.clearSelection();
+          document.body.removeChild(menu);
+        };
+        menu.appendChild(clearItem);
+      }
+      
+      document.body.appendChild(menu);
+      
+      // Close menu on click outside
+      const closeMenu = (event: MouseEvent) => {
+        if (!menu.contains(event.target as Node)) {
+          if (document.body.contains(menu)) {
+            document.body.removeChild(menu);
+          }
+          document.removeEventListener('click', closeMenu);
+        }
+      };
+      setTimeout(() => document.addEventListener('click', closeMenu), 0);
     });
 
     // Handle data from backend - display in terminal
@@ -121,21 +239,54 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
     
     const cleanupExitHandler = window.terminal.onExit(exitHandler);
 
-    // Handle window resize
+    // Handle window resize - make terminal grow with window
     const handleResize = () => {
-      if (fitAddonRef.current && xtermRef.current && window.terminal) {
+      if (!isMountedRef.current) return;
+      if (!fitAddonRef.current || !xtermRef.current || !window.terminal) return;
+      
+      try {
+        // Check if terminal element is visible
+        const element = xtermRef.current.element;
+        if (!element || element.clientWidth === 0 || element.clientHeight === 0) {
+          return;
+        }
+        
+        // Fit terminal to container
         fitAddonRef.current.fit();
+        
         const { cols, rows } = xtermRef.current;
-        window.terminal.resize(id, cols, rows).catch((error) => {
-          console.error(`[Terminal ${id}] Failed to resize:`, error);
-        });
+        if (cols && rows && cols > 0 && rows > 0) {
+          window.terminal.resize(id, cols, rows).catch((error) => {
+            console.error(`[Terminal ${id}] Failed to resize:`, error);
+          });
+        }
+      } catch (error) {
+        console.debug(`[Terminal ${id}] Resize skipped:`, error);
       }
     };
 
+    // Listen to window resize
     window.addEventListener('resize', handleResize);
 
-    // Initial resize after a short delay to ensure proper layout
-    setTimeout(handleResize, 100);
+    // Use ResizeObserver for container size changes
+    const resizeObserver = new ResizeObserver(() => {
+      if (isMountedRef.current) {
+        handleResize();
+      }
+    });
+    
+    if (terminalRef.current) {
+      resizeObserver.observe(terminalRef.current);
+    }
+
+    // Initial resize after terminal is ready
+    if (isReady) {
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          handleResize();
+        }
+      }, 200);
+    }
 
     // Cleanup
     return () => {
@@ -143,6 +294,7 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
       isMountedRef.current = false;
       
       window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       
       // Cleanup event listeners
       if (cleanupDataHandler) cleanupDataHandler();
@@ -159,7 +311,7 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
         xtermRef.current = null;
       }
     };
-  }, [id, cwd, env, onReady, onExit]);
+  }, [id, cwd, env, onReady, onExit, isReady]);
 
   return (
     <div

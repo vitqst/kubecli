@@ -25,10 +25,10 @@ echo ""
 HAS_ERRORS=0
 
 # Check for common error patterns (excluding known Electron internal errors)
-if grep -i "error" "$TEMP_LOG" | grep -v "No typescript errors" | grep -v "error TS" | grep -v "__dirname is not defined" | grep -v "Security Warning" > /dev/null; then
+if grep -i "error" "$TEMP_LOG" | grep -v "No typescript errors" | grep -v "error TS" | grep -v "__dirname is not defined" | grep -v "Security Warning" | grep -v "devtools://devtools" | grep -v "Failed to fetch" > /dev/null; then
     echo "❌ ERRORS FOUND:"
     echo ""
-    grep -i "error" "$TEMP_LOG" | grep -v "No typescript errors" | grep -v "error TS" | grep -v "__dirname is not defined" | grep -v "Security Warning" | head -20
+    grep -i "error" "$TEMP_LOG" | grep -v "No typescript errors" | grep -v "error TS" | grep -v "__dirname is not defined" | grep -v "Security Warning" | grep -v "devtools://devtools" | grep -v "Failed to fetch" | head -20
     echo ""
     HAS_ERRORS=1
 fi

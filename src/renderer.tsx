@@ -337,16 +337,23 @@ function App() {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     fontFamily: 'system-ui, sans-serif',
-    margin: '0 auto',
-    maxWidth: 960,
-    padding: '24px',
+    width: '100%',
+    height: '100vh',
+    margin: 0,
+    padding: 0,
     color: '#1f2933',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '24px',
+    padding: '16px 24px',
+    backgroundColor: '#f5f5f5',
+    borderBottom: '1px solid #e0e0e0',
+    flexShrink: 0,
   },
   title: {
     fontSize: '1.75rem',
@@ -449,11 +456,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   terminalContainer: {
     flex: 1,
-    height: 'calc(100vh - 100px)',
+    width: '100%',
     backgroundColor: '#1e1e1e',
+    overflow: 'hidden',
   },
   oldUIContainer: {
     flex: 1,
+    width: '100%',
+    overflowY: 'auto',
+    padding: '24px',
   },
 };
 
