@@ -88,3 +88,27 @@ You can exercise the application locally against a real Kubernetes API by runnin
    ```
 
 Minikube writes to the same kubeconfig file that the app reads, so no additional configuration is necessary once the cluster is running.
+
+## Implementation Roadmap
+
+### Milestone 0 – Context Picker & Command Runner
+- Parse `~/.kube/config`, normalize context metadata, and surface it in a simple selector.
+- Allow the user to switch the active context from within the UI and persist that choice.
+- Expose a lightweight command runner that executes `kubectl` with the selected context (e.g., `kubectl get pods`), showing stdout/stderr inline.
+- Acceptance: Selecting a context updates the current context and running a command respects the chosen context without leaving the app.
+
+### Optional Follow‑Ups
+- Add aliases or favorites for frequently used contexts.
+- Persist a short command history so users can re-run common invocations.
+- Layer in resource browsing (pods, services, deployments) once the core picker/runner loop feels solid.
+
+## Validation Plan
+- `npm run lint` and `npm run test` (unit coverage for config parsing and command execution helpers).
+- Manual smoke tests for context switching and sample commands (`kubectl get pods`, `kubectl config current-context`).
+- Integration tests that mock `kubectl` responses to validate parsing and UI state transitions once the runner is implemented.
+- Exploratory tests against Minikube and a real remote cluster to confirm kubeconfig handling.
+
+## Open Questions
+- Do we need a background service to watch kubeconfig changes, or can Electron file watchers suffice?
+- How should we persist user-specific preferences (aliases, command history) across devices?
+- Are there compliance constraints around storing kubeconfig data or cluster credentials locally?
