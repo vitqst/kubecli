@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type { KubeConfigSummary, KubectlResult, KubeContext, KubeConfigFile } from './common/kubeTypes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Terminal } from './components/Terminal';
+import { TerminalSidebar } from './components/TerminalSidebar';
 
 // Fix for webpack asset relocator __dirname issue in renderer
 declare global {
@@ -35,6 +36,40 @@ function App() {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [result, setResult] = useState<CommandResult | null>(null);
   const [showTerminal, setShowTerminal] = useState<boolean>(false);
+  const [namespaces, setNamespaces] = useState<string[]>([]);
+  const [selectedNamespace, setSelectedNamespace] = useState<string>('default');
+  const [loadingNamespaces, setLoadingNamespaces] = useState<boolean>(false);
+
+  // Load namespaces for current context
+  const loadNamespaces = useCallback(async (contextName: string) => {
+    if (!contextName || !kubeAPI) return;
+    
+    setLoadingNamespaces(true);
+    try {
+      const result = await kubeAPI.runCommand(contextName, 'get namespaces -o jsonpath={.items[*].metadata.name}');
+      if (result.code === 0 && result.stdout) {
+        const nsList = result.stdout.trim().split(/\s+/).filter(Boolean);
+        setNamespaces(nsList);
+        
+        // Restore last selected namespace from localStorage
+        const storageKey = `kubecli-namespace-${contextName}`;
+        const savedNamespace = localStorage.getItem(storageKey);
+        if (savedNamespace && nsList.includes(savedNamespace)) {
+          setSelectedNamespace(savedNamespace);
+        } else if (nsList.includes('default')) {
+          setSelectedNamespace('default');
+        } else if (nsList.length > 0) {
+          setSelectedNamespace(nsList[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load namespaces:', error);
+      setNamespaces(['default']);
+      setSelectedNamespace('default');
+    } finally {
+      setLoadingNamespaces(false);
+    }
+  }, []);
 
   const applySummary = useCallback((summary: KubeConfigSummary) => {
       setContexts(summary.contexts);
@@ -78,6 +113,22 @@ function App() {
   useEffect(() => {
     void refreshContexts();
   }, [refreshContexts]);
+
+  // Load namespaces when context changes
+  useEffect(() => {
+    if (selectedContext) {
+      void loadNamespaces(selectedContext);
+    }
+  }, [selectedContext, loadNamespaces]);
+
+  // Handle namespace change and save to localStorage
+  const handleNamespaceChange = useCallback((namespace: string) => {
+    setSelectedNamespace(namespace);
+    if (selectedContext) {
+      const storageKey = `kubecli-namespace-${selectedContext}`;
+      localStorage.setItem(storageKey, namespace);
+    }
+  }, [selectedContext]);
 
   const handleContextChange = useCallback(
     async (nextContext: string) => {
@@ -190,7 +241,24 @@ function App() {
 
       {showTerminal ? (
         <div style={styles.terminalContainer}>
-          <Terminal id="main" />
+          <TerminalSidebar
+            kubeconfigPath={kubeconfigPath}
+            selectedContext={selectedContext}
+            selectedNamespace={selectedNamespace}
+            namespaces={namespaces}
+            loadingNamespaces={loadingNamespaces}
+            onNamespaceChange={handleNamespaceChange}
+          />
+          <div style={styles.terminalMain}>
+            <Terminal 
+              key={`terminal-${kubeconfigPath}-${selectedNamespace}`}
+              id="main" 
+              env={{ 
+                KUBECONFIG: kubeconfigPath,
+                KUBECTL_NAMESPACE: selectedNamespace 
+              }}
+            />
+          </div>
         </div>
       ) : (
         <div style={styles.oldUIContainer}>
@@ -267,6 +335,37 @@ function App() {
             )}
           </ul>
         )}
+      </section>
+
+      <section style={styles.section}>
+        <h2 style={styles.subtitle}>Namespace</h2>
+        {loadingNamespaces && <p>Loading namespaces…</p>}
+        <div style={styles.contextRow}>
+          <label htmlFor="namespace-select" style={styles.label}>
+            Select Namespace
+          </label>
+          <select
+            id="namespace-select"
+            style={styles.select}
+            value={selectedNamespace}
+            onChange={(e) => handleNamespaceChange(e.target.value)}
+            disabled={loadingNamespaces || namespaces.length === 0}
+          >
+            {namespaces.map((ns) => (
+              <option key={ns} value={ns}>
+                {ns}
+              </option>
+            ))}
+          </select>
+        </div>
+        {namespaces.length === 0 && !loadingNamespaces && (
+          <p style={styles.placeholder}>
+            No namespaces found. Make sure you have access to the cluster.
+          </p>
+        )}
+        <p style={styles.hint}>
+          Commands will automatically use <code>-n {selectedNamespace}</code>
+        </p>
       </section>
 
       <section style={styles.section}>
@@ -441,6 +540,12 @@ const styles: Record<string, React.CSSProperties> = {
   placeholder: {
     color: '#52606d',
   },
+  hint: {
+    fontSize: '0.875rem',
+    color: '#52606d',
+    marginTop: '8px',
+    fontStyle: 'italic',
+  },
   error: {
     color: '#c81e1e',
     marginTop: '8px',
@@ -457,7 +562,14 @@ const styles: Record<string, React.CSSProperties> = {
   terminalContainer: {
     flex: 1,
     width: '100%',
+    display: 'flex',
+    flexDirection: 'row',
     backgroundColor: '#1e1e1e',
+    overflow: 'hidden',
+  },
+  terminalMain: {
+    flex: 1,
+    height: '100%',
     overflow: 'hidden',
   },
   oldUIContainer: {

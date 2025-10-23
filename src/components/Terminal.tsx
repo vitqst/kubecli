@@ -83,6 +83,21 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
       .then(() => {
         console.log(`[Terminal ${id}] Created successfully`);
         setIsReady(true);
+        
+        // Set up kubectl alias with namespace if provided
+        if (env?.KUBECTL_NAMESPACE && window.terminal) {
+          const namespace = env.KUBECTL_NAMESPACE;
+          const aliasCommand = `alias kubectl='kubectl -n ${namespace}'\n`;
+          window.terminal.write(id, aliasCommand).catch((err) => {
+            console.error('Failed to set kubectl alias:', err);
+          });
+          
+          // Show info message
+          xterm.writeln(`\x1b[32m✓ kubectl configured for namespace: ${namespace}\x1b[0m`);
+          xterm.writeln(`\x1b[36mℹ All kubectl commands will use -n ${namespace} automatically\x1b[0m`);
+          xterm.writeln('');
+        }
+        
         if (onReady) onReady();
       })
       .catch((error) => {
