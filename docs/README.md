@@ -5,6 +5,10 @@
 - **[Main README](../README.md)** - Start here for project overview
 - **[Project Files Overview](PROJECT_FILES.md)** - Understanding the project structure
 
+## Features
+
+- **[Kubeconfig File Switching](KUBECONFIG_SWITCHING.md)** - Switch between multiple kubeconfig files
+
 ## For Developers
 
 - **[AI Agents Guide](../AGENTS.md)** - Guide for AI coding agents

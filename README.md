@@ -6,10 +6,12 @@ A desktop application for managing Kubernetes contexts and running kubectl comma
 
 ## Features
 
+- **Kubeconfig File Switching**: Switch between multiple kubeconfig files (not just contexts)
 - **Context Management**: View and switch between kubeconfig contexts
 - **Command Execution**: Run kubectl commands with automatic context injection
 - **Output Display**: Separate STDOUT/STDERR views with exit codes and timestamps
 - **Error Handling**: Clear error messages for common issues
+- **Auto-Discovery**: Automatically finds kubeconfig files in `~/.kube/` and `KUBECONFIG`
 
 ## Prerequisites
 

@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('kube', {
     const response = await ipcRenderer.invoke('kube:set-context', contextName);
     return unwrap(response);
   },
+  setConfig: async (configPath: string): Promise<KubeConfigSummary> => {
+    const response = await ipcRenderer.invoke('kube:set-config', configPath);
+    return unwrap(response);
+  },
   runCommand: async (
     context: string,
     command: string

@@ -6,10 +6,17 @@ export interface KubeContext {
   server?: string;
 }
 
+export interface KubeConfigFile {
+  path: string;
+  name: string;
+  isDefault: boolean;
+}
+
 export interface KubeConfigSummary {
   contexts: KubeContext[];
   currentContext: string | null;
   kubeconfigPath: string;
+  availableConfigs?: KubeConfigFile[];
 }
 
 export interface KubectlResult {

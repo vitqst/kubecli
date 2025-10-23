@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { KubeConfigSummary, KubectlResult, KubeContext } from './common/kubeTypes';
+import type { KubeConfigSummary, KubectlResult, KubeContext, KubeConfigFile } from './common/kubeTypes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Fix for webpack asset relocator __dirname issue in renderer
@@ -26,6 +26,7 @@ function App() {
   const [currentContext, setCurrentContext] = useState<string | null>(null);
   const [selectedContext, setSelectedContext] = useState<string>('');
   const [kubeconfigPath, setKubeconfigPath] = useState<string>('');
+  const [availableConfigs, setAvailableConfigs] = useState<KubeConfigFile[]>([]);
   const [command, setCommand] = useState<string>('');
   const [loadState, setLoadState] = useState<LoadState>('idle');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -37,6 +38,7 @@ function App() {
       setContexts(summary.contexts);
       setCurrentContext(summary.currentContext);
       setKubeconfigPath(summary.kubeconfigPath);
+      setAvailableConfigs(summary.availableConfigs || []);
 
       const availableNames = summary.contexts.map((ctx) => ctx.name);
       const fallback = summary.currentContext ?? availableNames[0] ?? '';
@@ -93,6 +95,28 @@ function App() {
       }
     },
     [applySummary, refreshContexts]
+  );
+
+  const handleConfigChange = useCallback(
+    async (configPath: string) => {
+      setLoadState('loading');
+      setLoadError(null);
+      setRunError(null);
+      try {
+        if (!kubeAPI) {
+          throw new Error('Renderer bridge unavailable.');
+        }
+        const summary = await kubeAPI.setConfig(configPath);
+        applySummary(summary);
+        setLoadState('idle');
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unable to switch kubeconfig';
+        setLoadError(message);
+        setLoadState('error');
+      }
+    },
+    [applySummary]
   );
 
   const handleRun = useCallback(async () => {
@@ -157,13 +181,35 @@ function App() {
       </header>
 
       <section style={styles.section}>
-        <h2 style={styles.subtitle}>Context</h2>
+        <h2 style={styles.subtitle}>Kubeconfig & Context</h2>
         {loadState === 'loading' && <p>Loading contexts…</p>}
         {loadError && (
           <p style={styles.error}>
             {loadError} — check your kubeconfig or kubectl installation.
           </p>
         )}
+        
+        {availableConfigs.length > 1 && (
+          <div style={styles.contextRow}>
+            <label htmlFor="config-select" style={styles.label}>
+              Kubeconfig file
+            </label>
+            <select
+              id="config-select"
+              style={styles.select}
+              disabled={disabled}
+              value={kubeconfigPath}
+              onChange={(event) => handleConfigChange(event.target.value)}
+            >
+              {availableConfigs.map((config) => (
+                <option key={config.path} value={config.path}>
+                  {config.name} {config.isDefault ? '(default)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div style={styles.contextRow}>
           <label htmlFor="context-select" style={styles.label}>
             Active context

@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
-import { loadKubeConfig, runKubectlCommand, useContext } from './main/kube';
+import { loadKubeConfig, runKubectlCommand, useContext, setKubeconfigPath } from './main/kube';
 import type { KubeConfigSummary, KubectlResult } from './common/kubeTypes';
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
@@ -127,6 +127,22 @@ function registerIpcHandlers() {
       }
     }
   );
+
+  ipcMain.handle('kube:set-config', async (_event, configPath: string) => {
+    if (!configPath) {
+      return err('Config path is required');
+    }
+
+    try {
+      setKubeconfigPath(configPath);
+      const summary = await loadKubeConfig();
+      return ok(summary);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to switch kubeconfig';
+      return err(message);
+    }
+  });
 }
 
 app.on('ready', createWindow);

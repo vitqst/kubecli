@@ -1,14 +1,21 @@
 import { spawn } from 'child_process';
-import { access, constants, readFile } from 'fs/promises';
+import { access, constants, readFile, readdir } from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import YAML from 'yaml';
-import type { KubeConfigSummary, KubectlResult } from '../common/kubeTypes';
+import type { KubeConfigSummary, KubectlResult, KubeConfigFile } from '../common/kubeTypes';
 import { type KubeContext } from '../common/kubeTypes';
 
 const DEFAULT_RELATIVE_CONFIG = path.join('.kube', 'config');
 
+let currentKubeconfigPath: string | null = null;
+
 function resolveKubeconfigPath(): string {
+  // If a specific config was set, use it
+  if (currentKubeconfigPath) {
+    return currentKubeconfigPath;
+  }
+
   const envPath = process.env.KUBECONFIG;
   if (envPath && envPath.trim().length > 0) {
     const [firstPath] = envPath.split(path.delimiter).filter(Boolean);
@@ -18,6 +25,96 @@ function resolveKubeconfigPath(): string {
   }
 
   return path.join(os.homedir(), DEFAULT_RELATIVE_CONFIG);
+}
+
+export async function discoverKubeconfigs(): Promise<KubeConfigFile[]> {
+  const configs: KubeConfigFile[] = [];
+  const homeDir = os.homedir();
+  const kubeDir = path.join(homeDir, '.kube');
+  const defaultPath = path.join(kubeDir, 'config');
+
+  try {
+    // Check default config
+    await access(defaultPath, constants.R_OK);
+    configs.push({
+      path: defaultPath,
+      name: 'default',
+      isDefault: true,
+    });
+  } catch {
+    // Default config doesn't exist
+  }
+
+  try {
+    // Scan .kube directory for other config files
+    const files = await readdir(kubeDir);
+    
+    for (const file of files) {
+      // Skip the default config (already added)
+      if (file === 'config') continue;
+      
+      // Look for files that might be kubeconfigs
+      // Common patterns: config-*, kubeconfig-*, *.yaml, *.yml, or files without extension
+      if (
+        file.startsWith('config-') ||
+        file.startsWith('kubeconfig') ||
+        file.endsWith('.yaml') ||
+        file.endsWith('.yml') ||
+        !file.includes('.')
+      ) {
+        const filePath = path.join(kubeDir, file);
+        
+        try {
+          await access(filePath, constants.R_OK);
+          
+          // Try to parse it as YAML to verify it's a valid kubeconfig
+          const content = await readFile(filePath, 'utf8');
+          const parsed = YAML.parse(content);
+          
+          // Check if it looks like a kubeconfig (has contexts or clusters)
+          if (parsed && (parsed.contexts || parsed.clusters)) {
+            configs.push({
+              path: filePath,
+              name: file,
+              isDefault: false,
+            });
+          }
+        } catch {
+          // Skip files that can't be read or parsed
+        }
+      }
+    }
+  } catch {
+    // .kube directory doesn't exist or can't be read
+  }
+
+  // Check KUBECONFIG environment variable for additional paths
+  const envPath = process.env.KUBECONFIG;
+  if (envPath && envPath.trim().length > 0) {
+    const paths = envPath.split(path.delimiter).filter(Boolean);
+    
+    for (const configPath of paths) {
+      // Skip if already in the list
+      if (configs.some(c => c.path === configPath)) continue;
+      
+      try {
+        await access(configPath, constants.R_OK);
+        configs.push({
+          path: configPath,
+          name: path.basename(configPath),
+          isDefault: false,
+        });
+      } catch {
+        // Skip inaccessible paths
+      }
+    }
+  }
+
+  return configs;
+}
+
+export function setKubeconfigPath(configPath: string): void {
+  currentKubeconfigPath = configPath;
 }
 
 export async function loadKubeConfig(): Promise<KubeConfigSummary> {
@@ -57,10 +154,14 @@ export async function loadKubeConfig(): Promise<KubeConfigSummary> {
   const currentContext =
     typeof config['current-context'] === 'string' ? config['current-context'] : null;
 
+  // Discover available kubeconfig files
+  const availableConfigs = await discoverKubeconfigs();
+
   return {
     contexts,
     currentContext,
     kubeconfigPath,
+    availableConfigs,
   };
 }
 
