@@ -130,6 +130,26 @@ function App() {
     }
   }, [selectedContext]);
 
+  // Handle view pod - show YAML in terminal
+  const handleViewPod = useCallback((podName: string) => {
+    if (window.terminal && selectedNamespace) {
+      const command = `kubectl get pod ${podName} -n ${selectedNamespace} -o yaml\n`;
+      window.terminal.write('main', command).catch((error) => {
+        console.error('Failed to write view command:', error);
+      });
+    }
+  }, [selectedNamespace]);
+
+  // Handle edit pod - open in kubectl edit
+  const handleEditPod = useCallback((podName: string) => {
+    if (window.terminal && selectedNamespace) {
+      const command = `kubectl edit pod ${podName} -n ${selectedNamespace}\n`;
+      window.terminal.write('main', command).catch((error) => {
+        console.error('Failed to write edit command:', error);
+      });
+    }
+  }, [selectedNamespace]);
+
   const handleContextChange = useCallback(
     async (nextContext: string) => {
       setSelectedContext(nextContext);
@@ -248,6 +268,8 @@ function App() {
             namespaces={namespaces}
             loadingNamespaces={loadingNamespaces}
             onNamespaceChange={handleNamespaceChange}
+            onViewPod={handleViewPod}
+            onEditPod={handleEditPod}
           />
           <div style={styles.terminalMain}>
             <Terminal 
