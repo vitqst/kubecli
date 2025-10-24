@@ -44,6 +44,12 @@ function App() {
   const loadNamespaces = useCallback(async (contextName: string) => {
     if (!contextName || !kubeAPI) return;
     
+    // Verify context exists in current context list
+    if (!contexts.some(ctx => ctx.name === contextName)) {
+      console.log(`Context ${contextName} not found in current config, skipping namespace load`);
+      return;
+    }
+    
     setLoadingNamespaces(true);
     try {
       const result = await kubeAPI.runCommand(contextName, 'get namespaces -o jsonpath={.items[*].metadata.name}');
@@ -69,7 +75,7 @@ function App() {
     } finally {
       setLoadingNamespaces(false);
     }
-  }, []);
+  }, [contexts]);
 
   const applySummary = useCallback((summary: KubeConfigSummary) => {
       setContexts(summary.contexts);
@@ -175,6 +181,10 @@ function App() {
       setLoadState('loading');
       setLoadError(null);
       setRunError(null);
+      // Clear selected context and namespaces to prevent race conditions
+      setSelectedContext('');
+      setNamespaces([]);
+      setSelectedNamespace('default');
       try {
         if (!kubeAPI) {
           throw new Error('Renderer bridge unavailable.');
@@ -229,6 +239,7 @@ function App() {
   }, [contexts, selectedContext]);
 
   const disabled = contexts.length === 0 || loadState === 'loading';
+  const configSelectDisabled = loadState === 'loading'; // Only disable during loading, not when no contexts
 
   if (!kubeAPI) {
     return (
@@ -263,18 +274,21 @@ function App() {
         <div style={styles.terminalContainer}>
           <TerminalSidebar
             kubeconfigPath={kubeconfigPath}
+            availableConfigs={availableConfigs}
             selectedContext={selectedContext}
+            contexts={contexts}
             selectedNamespace={selectedNamespace}
             namespaces={namespaces}
             loadingNamespaces={loadingNamespaces}
+            onConfigChange={handleConfigChange}
+            onContextChange={handleContextChange}
             onNamespaceChange={handleNamespaceChange}
             onViewPod={handleViewPod}
             onEditPod={handleEditPod}
           />
           <div style={styles.terminalMain}>
             <Terminal 
-              key={`terminal-${kubeconfigPath}-${selectedNamespace}`}
-              id="main" 
+              id="main"
               env={{ 
                 KUBECONFIG: kubeconfigPath,
                 KUBECTL_NAMESPACE: selectedNamespace 
@@ -302,7 +316,7 @@ function App() {
             <select
               id="config-select"
               style={styles.select}
-              disabled={disabled}
+              disabled={configSelectDisabled}
               value={kubeconfigPath}
               onChange={(event) => handleConfigChange(event.target.value)}
             >
@@ -627,6 +641,18 @@ function initializeApp() {
 
 // Global error handlers
 window.addEventListener('error', (event) => {
+  // Suppress xterm.js disposal errors - these are harmless and occur during cleanup
+  if (event.message && typeof event.message === 'string') {
+    const msg = event.message.toLowerCase();
+    if (msg.includes('handleresize') || 
+        msg.includes('dimensions') || 
+        msg.includes('xterm')) {
+      // These are expected during terminal disposal, don't log them
+      event.preventDefault();
+      return;
+    }
+  }
+  
   console.error('[Global Error Handler] Uncaught error:', {
     message: event.message,
     filename: event.filename,

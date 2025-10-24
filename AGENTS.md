@@ -39,14 +39,16 @@ This guide helps new contributors―human or AI―spin up quickly and begin writ
 ## 6. Validate
 
 - Run linting or formatting scripts (`npm run lint`, `npm run format`, etc.) if available.
-- Launch the app locally with `npm start` and exercise the impacted workflow.
-- If Kubernetes interaction is involved, test against Minikube or another accessible cluster.
+
+## 6.1 Troubleshooting
+
+- When I prompt `check the errors` or something like that please do this step to debug and capture error automatically:
+- Launch the app locally with `eval 'pkill -9 -f electron; rm -rf .webpack; ./check-errors.sh'` and exercise the impacted workflow.
 - Capture any manual verification notes (commands run, screenshots) for reviewers.
 
 ## 7. Wrap Up
 
 - Review your diff for unintended changes or secrets.
 - Update documentation when behavior changes (README, `docs/`, inline docs).
-- Summarize the change, tests performed, and known gaps in the pull request or handoff message.
 
 Following these steps keeps contributions predictable, testable, and easy for teammates to review.

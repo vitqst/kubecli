@@ -18,6 +18,49 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
   const [isReady, setIsReady] = useState(false);
   const isMountedRef = useRef(true);
 
+  // Handle environment changes without recreating terminal
+  useEffect(() => {
+    if (!xtermRef.current || !env || !isReady) return;
+    
+    console.log(`[Terminal ${id}] Environment changed:`, env);
+    
+    // Clear terminal for fresh start
+    if (window.terminal) {
+      window.terminal.write(id, 'clear\n').catch((err) => {
+        console.error('Failed to clear terminal:', err);
+      });
+    }
+    
+    // Give clear command time to execute before showing messages
+    setTimeout(() => {
+      if (!xtermRef.current || !isMountedRef.current) return;
+      
+      // Update KUBECONFIG when config changes
+      if (env.KUBECONFIG && window.terminal) {
+        const configCommand = `export KUBECONFIG=${env.KUBECONFIG}\n`;
+        window.terminal.write(id, configCommand).catch((err) => {
+          console.error('Failed to update KUBECONFIG:', err);
+        });
+        
+        xtermRef.current.writeln(`\x1b[36m✓ KUBECONFIG: ${env.KUBECONFIG}\x1b[0m`);
+      }
+      
+      // Update kubectl alias when namespace changes
+      if (env.KUBECTL_NAMESPACE && window.terminal) {
+        const namespace = env.KUBECTL_NAMESPACE;
+        const aliasCommand = `export KUBECTL_NAMESPACE=${namespace}\nalias kubectl='kubectl -n ${namespace}'\n`;
+        window.terminal.write(id, aliasCommand).catch((err) => {
+          console.error('Failed to update kubectl alias:', err);
+        });
+        
+        xtermRef.current.writeln(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
+        xtermRef.current.writeln(`\x1b[90m  All kubectl commands will use -n ${namespace}\x1b[0m`);
+      }
+      
+      xtermRef.current.writeln('');
+    }, 100);
+  }, [env, id, isReady]);
+
   useEffect(() => {
     isMountedRef.current = true;
     
@@ -63,12 +106,17 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
     xterm.loadAddon(fitAddon);
 
     // Open terminal in DOM
+    if (!terminalRef.current) {
+      console.error(`[Terminal ${id}] Container ref is null`);
+      return;
+    }
+    
     xterm.open(terminalRef.current);
     
     // Wait a tick for DOM to be ready before fitting
     setTimeout(() => {
       try {
-    fitAddon.fit();
+        fitAddon.fit();
       } catch (error) {
         console.error(`[Terminal ${id}] Initial fit error:`, error);
       }
@@ -256,27 +304,46 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
 
     // Handle window resize - make terminal grow with window
     const handleResize = () => {
+      // Early return if component is unmounted
       if (!isMountedRef.current) return;
-      if (!fitAddonRef.current || !xtermRef.current || !window.terminal) return;
+      
+      // Check all refs are still valid
+      const fitAddon = fitAddonRef.current;
+      const xterm = xtermRef.current;
+      
+      if (!fitAddon || !xterm || !window.terminal) return;
       
       try {
-        // Check if terminal element is visible
-        const element = xtermRef.current.element;
-        if (!element || element.clientWidth === 0 || element.clientHeight === 0) {
+        // Check if terminal is disposed - element becomes null after dispose()
+        const element = xterm.element;
+        if (!element) {
+          return;
+        }
+        
+        // Check if terminal element is visible and has dimensions
+        if (element.clientWidth === 0 || element.clientHeight === 0) {
+          return;
+        }
+        
+        // Check if terminal has buffer (disposed terminals don't have buffer)
+        if (!xterm.buffer || !xterm.buffer.active) {
           return;
         }
         
         // Fit terminal to container
-        fitAddonRef.current.fit();
+        fitAddon.fit();
         
-        const { cols, rows } = xtermRef.current;
+        // Get dimensions after fit
+        const { cols, rows } = xterm;
         if (cols && rows && cols > 0 && rows > 0) {
           window.terminal.resize(id, cols, rows).catch((error) => {
-            console.error(`[Terminal ${id}] Failed to resize:`, error);
+            // Ignore resize errors - terminal may have closed
+            console.debug(`[Terminal ${id}] Resize backend failed:`, error);
           });
         }
       } catch (error) {
-        console.debug(`[Terminal ${id}] Resize skipped:`, error);
+        // Silently ignore all resize errors - terminal may be disposed
+        // This is normal during cleanup
       }
     };
 
@@ -286,7 +353,12 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
     // Use ResizeObserver for container size changes
     const resizeObserver = new ResizeObserver(() => {
       if (isMountedRef.current) {
-        handleResize();
+        try {
+          handleResize();
+        } catch (error) {
+          // Ignore resize errors during cleanup
+          console.debug(`[Terminal ${id}] ResizeObserver error:`, error);
+        }
       }
     });
     
@@ -294,39 +366,74 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
       resizeObserver.observe(terminalRef.current);
     }
 
-    // Initial resize after terminal is ready
-    if (isReady) {
-      setTimeout(() => {
-        if (isMountedRef.current) {
-          handleResize();
-        }
-      }, 200);
-    }
-
     // Cleanup
     return () => {
       console.log(`[Terminal ${id}] Cleaning up...`);
       isMountedRef.current = false;
       
+      // Remove event listeners first
       window.removeEventListener('resize', handleResize);
-      resizeObserver.disconnect();
+      
+      // Disconnect resize observer
+      try {
+        resizeObserver.disconnect();
+      } catch (error) {
+        console.debug(`[Terminal ${id}] ResizeObserver disconnect error:`, error);
+      }
       
       // Cleanup event listeners
       if (cleanupDataHandler) cleanupDataHandler();
       if (cleanupExitHandler) cleanupExitHandler();
       
+      // Close backend terminal
       if (window.terminal) {
         window.terminal.close(id).catch((error) => {
           console.error(`[Terminal ${id}] Failed to close:`, error);
         });
       }
       
+      // Dispose fit addon first (before terminal)
+      if (fitAddonRef.current) {
+        try {
+          fitAddonRef.current.dispose();
+        } catch (error) {
+          console.debug(`[Terminal ${id}] FitAddon dispose error:`, error);
+        }
+        fitAddonRef.current = null;
+      }
+      
+      // Dispose terminal last
       if (xtermRef.current) {
-        xtermRef.current.dispose();
+        try {
+          xtermRef.current.dispose();
+        } catch (error) {
+          console.debug(`[Terminal ${id}] Terminal dispose error:`, error);
+        }
         xtermRef.current = null;
       }
     };
-  }, [id, cwd, env, onReady, onExit, isReady]);
+  }, [id, cwd, onReady, onExit]);
+
+  // Separate effect for initial resize after terminal is ready
+  useEffect(() => {
+    if (isReady && isMountedRef.current && fitAddonRef.current && xtermRef.current) {
+      setTimeout(() => {
+        if (isMountedRef.current && fitAddonRef.current) {
+          try {
+            fitAddonRef.current.fit();
+            const { cols, rows } = xtermRef.current!;
+            if (cols && rows && cols > 0 && rows > 0 && window.terminal) {
+              window.terminal.resize(id, cols, rows).catch((error) => {
+                console.error(`[Terminal ${id}] Failed to resize:`, error);
+              });
+            }
+          } catch (error) {
+            console.debug(`[Terminal ${id}] Initial resize skipped:`, error);
+          }
+        }
+      }, 200);
+    }
+  }, [isReady, id]);
 
   return (
     <div

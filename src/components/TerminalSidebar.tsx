@@ -24,12 +24,28 @@ interface CronJob {
   lastSchedule: string;
 }
 
+interface Context {
+  name: string;
+  cluster?: string;
+  user?: string;
+}
+
+interface KubeconfigFile {
+  path: string;
+  name: string;
+  isDefault: boolean;
+}
+
 interface TerminalSidebarProps {
   kubeconfigPath: string;
+  availableConfigs: KubeconfigFile[];
   selectedContext: string;
+  contexts: Context[];
   selectedNamespace: string;
   namespaces: string[];
   loadingNamespaces: boolean;
+  onConfigChange: (path: string) => void;
+  onContextChange: (context: string) => void;
   onNamespaceChange: (namespace: string) => void;
   onViewPod: (podName: string) => void;
   onEditPod: (podName: string) => void;
@@ -37,10 +53,14 @@ interface TerminalSidebarProps {
 
 export function TerminalSidebar({
   kubeconfigPath,
+  availableConfigs,
   selectedContext,
+  contexts,
   selectedNamespace,
   namespaces,
   loadingNamespaces,
+  onConfigChange,
+  onContextChange,
   onNamespaceChange,
   onViewPod,
   onEditPod,
@@ -266,15 +286,50 @@ export function TerminalSidebar({
             <h3 style={styles.title}>Kubernetes</h3>
           </div>
 
-          {/* Context Info */}
-          <div style={styles.section}>
-            <div style={styles.sectionTitle}>Context</div>
-            <div style={styles.contextInfo}>
-              <div style={styles.contextName}>{selectedContext || 'None'}</div>
-              <div style={styles.configPath} title={kubeconfigPath}>
-                {kubeconfigPath ? kubeconfigPath.split('/').pop() : 'No config'}
+          {/* Kubeconfig File Selector */}
+          {availableConfigs.length > 1 && (
+            <div style={styles.section}>
+              <div style={styles.sectionTitle}>Kubeconfig File</div>
+              <select
+                value={kubeconfigPath}
+                onChange={(e) => onConfigChange(e.target.value)}
+                style={styles.select}
+              >
+                {availableConfigs.map((config) => (
+                  <option key={config.path} value={config.path}>
+                    {config.name} {config.isDefault ? '(default)' : ''}
+                  </option>
+                ))}
+              </select>
+              <div style={styles.hint}>
+                {kubeconfigPath.split('/').pop()}
               </div>
             </div>
+          )}
+
+          {/* Context Selector */}
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Context</div>
+            {contexts.length > 0 ? (
+              <>
+                <select
+                  value={selectedContext}
+                  onChange={(e) => onContextChange(e.target.value)}
+                  style={styles.select}
+                >
+                  {contexts.map((ctx) => (
+                    <option key={ctx.name} value={ctx.name}>
+                      {ctx.name}
+                    </option>
+                  ))}
+                </select>
+                <div style={styles.hint}>
+                  Cluster: {contexts.find(c => c.name === selectedContext)?.cluster || 'N/A'}
+                </div>
+              </>
+            ) : (
+              <div style={styles.noData}>No contexts available</div>
+            )}
           </div>
 
           {/* Namespace Selector */}

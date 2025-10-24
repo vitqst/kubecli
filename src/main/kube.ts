@@ -231,14 +231,20 @@ export async function runKubectlCommand(
   }
 
   const finalArgs = ['--context', contextName, ...args];
+  const kubeconfigPath = resolveKubeconfigPath();
 
-  return executeKubectl(finalArgs);
+  return executeKubectl(finalArgs, kubeconfigPath);
 }
 
-async function executeKubectl(args: string[]): Promise<KubectlResult> {
+async function executeKubectl(args: string[], kubeconfigPath?: string): Promise<KubectlResult> {
   return new Promise<KubectlResult>((resolve, reject) => {
+    const env = { ...process.env };
+    if (kubeconfigPath) {
+      env.KUBECONFIG = kubeconfigPath;
+    }
+
     const child = spawn('kubectl', args, {
-      env: process.env,
+      env,
     });
 
     let stdout = '';
@@ -279,7 +285,8 @@ export async function useContext(contextName: string): Promise<void> {
     throw new Error('Context name is required');
   }
 
-  const result = await executeKubectl(['config', 'use-context', contextName]);
+  const kubeconfigPath = resolveKubeconfigPath();
+  const result = await executeKubectl(['config', 'use-context', contextName], kubeconfigPath);
 
   if (result.code !== 0) {
     const message = result.stderr || result.stdout || 'Failed to switch context';
