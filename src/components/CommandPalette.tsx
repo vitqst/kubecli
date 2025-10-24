@@ -9,23 +9,158 @@ interface CommandPaletteProps {
   onShowContextMenu?: (x: number, y: number, resourceType: ResourceType, resourceName: string, namespace: string) => void;
 }
 
+interface CommandItem {
+  type: 'resource-action';
+  resourceType: ResourceType;
+  resourceName: string;
+  namespace: string;
+  actionId: string;
+  actionLabel: string;
+  actionIcon: string;
+  actionDescription: string;
+  searchText: string;
+}
+
 export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextMenu }: CommandPaletteProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Use global resource cache from context
-  const { search, isLoading } = useResourceCache();
+  const { resources, isLoading } = useResourceCache();
   
-  // Get search results from cache
-  const results = searchQuery ? search(searchQuery) : [];
+  // Build ALL command items from ALL resources (memoized for performance)
+  const allCommandItems = React.useMemo(() => {
+    const items: CommandItem[] = [];
+    
+    resources.forEach(resource => {
+      // Get all actions (favorites + context menu)
+      const favoriteActions = getFavoriteActions(resource.type, {
+        resourceName: resource.name,
+        namespace: resource.namespace,
+        resourceType: resource.type,
+      });
+      
+      const contextActions = getContextMenuActions(resource.type, {
+        resourceName: resource.name,
+        namespace: resource.namespace,
+        resourceType: resource.type,
+      });
+      
+      const allActions = [...favoriteActions, ...contextActions];
+      
+      // Create a command item for each action
+      allActions.forEach(action => {
+        items.push({
+          type: 'resource-action',
+          resourceType: resource.type,
+          resourceName: resource.name,
+          namespace: resource.namespace,
+          actionId: action.id,
+          actionLabel: action.label,
+          actionIcon: action.icon,
+          actionDescription: action.description,
+          searchText: `${resource.name} ${resource.namespace} ${resource.type} ${action.label} ${action.description}`.toLowerCase(),
+        });
+      });
+    });
+    
+    return items;
+  }, [resources]);
+  
+  // Filter command items by search query
+  const filteredCommands = React.useMemo(() => {
+    if (!searchQuery) return [];
+    
+    const lowerQuery = searchQuery.toLowerCase();
+    
+    // Check for action@resourcename syntax (e.g., logs@nginx or exec@api or trigg@)
+    const actionAtMatch = lowerQuery.match(/^(\w+)@(.*)$/);
+    if (actionAtMatch) {
+      const [, actionFilter, nameFilter] = actionAtMatch;
+      
+      return allCommandItems.filter(item => {
+        const actionMatches = item.actionLabel.toLowerCase().includes(actionFilter) || 
+                             item.actionId.toLowerCase().includes(actionFilter);
+        const nameMatches = !nameFilter.trim() || 
+                           item.resourceName.toLowerCase().includes(nameFilter.trim()) || 
+                           item.namespace.toLowerCase().includes(nameFilter.trim());
+        
+        return actionMatches && nameMatches;
+      }).slice(0, 20);
+    }
+    
+    // Check for @action syntax (e.g., @logs or @exec)
+    if (lowerQuery.startsWith('@')) {
+      const actionFilter = lowerQuery.substring(1);
+      
+      if (!actionFilter) return []; // Just "@" with nothing after
+      
+      return allCommandItems.filter(item => {
+        return item.actionLabel.toLowerCase().includes(actionFilter) || 
+               item.actionId.toLowerCase().includes(actionFilter);
+      }).slice(0, 20);
+    }
+    
+    // Check for resource:name@action syntax (e.g., pod:nginx@logs)
+    if (lowerQuery.includes('@')) {
+      const parts = lowerQuery.split('@');
+      const beforeAt = parts[0];
+      const actionFilter = parts[1] || '';
+      
+      // Parse the part before @
+      const colonParts = beforeAt.split(':');
+      const resourceTypeFilter = colonParts[0];
+      const nameFilter = colonParts[1] || '';
+      
+      return allCommandItems.filter(item => {
+        const typeMatches = item.resourceType.toLowerCase().includes(resourceTypeFilter);
+        const nameMatches = !nameFilter.trim() || 
+                           item.resourceName.toLowerCase().includes(nameFilter.trim()) || 
+                           item.namespace.toLowerCase().includes(nameFilter.trim());
+        const actionMatches = !actionFilter.trim() || 
+                             item.actionLabel.toLowerCase().includes(actionFilter.trim()) || 
+                             item.actionId.toLowerCase().includes(actionFilter.trim());
+        
+        return typeMatches && nameMatches && actionMatches;
+      }).slice(0, 20);
+    }
+    
+    // Check for resource:name syntax (e.g., pod:nginx)
+    if (lowerQuery.includes(':')) {
+      const parts = lowerQuery.split(':');
+      const resourceTypeFilter = parts[0];
+      const nameFilter = parts[1] || '';
+      
+      return allCommandItems.filter(item => {
+        const typeMatches = item.resourceType.toLowerCase().includes(resourceTypeFilter);
+        const nameMatches = !nameFilter.trim() || 
+                           item.resourceName.toLowerCase().includes(nameFilter.trim()) || 
+                           item.namespace.toLowerCase().includes(nameFilter.trim());
+        
+        return typeMatches && nameMatches;
+      }).slice(0, 20);
+    }
+    
+    // Plain search - search in all fields
+    return allCommandItems.filter(item => 
+      item.searchText.includes(lowerQuery)
+    ).slice(0, 20);
+  }, [searchQuery, allCommandItems]);
 
   // Focus input when opened
   useEffect(() => {
     if (isOpen) {
       searchInputRef.current?.focus();
       setSearchQuery(''); // Clear on open
+      setSelectedIndex(0); // Reset selection
     }
   }, [isOpen]);
+
+  // Reset selected index when results change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [filteredCommands.length]);
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -35,12 +170,47 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
       // Escape to close
       if (e.key === 'Escape') {
         onClose();
+        return;
+      }
+
+      // Arrow Down - Move selection down
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev => 
+          prev < filteredCommands.length - 1 ? prev + 1 : prev
+        );
+        return;
+      }
+
+      // Arrow Up - Move selection up
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => prev > 0 ? prev - 1 : 0);
+        return;
+      }
+
+      // Enter - Execute selected command
+      if (e.key === 'Enter' && filteredCommands.length > 0) {
+        e.preventDefault();
+        const selected = filteredCommands[selectedIndex];
+        if (selected) {
+          onSelectResult(selected.actionId, selected.resourceType, selected.resourceName, selected.namespace);
+          onClose();
+          // Focus terminal after closing
+          setTimeout(() => {
+            const terminalElement = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+            if (terminalElement) {
+              terminalElement.focus();
+            }
+          }, 100);
+        }
+        return;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, filteredCommands, selectedIndex, onSelectResult]);
 
   // Click outside to close
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -68,6 +238,9 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
         .command-palette-results::-webkit-scrollbar-thumb:hover {
           background: #4e4e4e;
         }
+        .command-item:hover {
+          background-color: #2a2d2e !important;
+        }
       `}</style>
 
       <div style={styles.container}>
@@ -77,7 +250,7 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           <input
             ref={searchInputRef}
             type="text"
-            placeholder={isLoading ? "Loading resources..." : "Search resources (try: pod:nginx or cron:backup)"}
+            placeholder={isLoading ? "Loading resources..." : "Type to search commands..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={styles.searchInput}
@@ -94,71 +267,65 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           )}
         </div>
 
-        {/* Search Results */}
+        {/* Command Results */}
         {searchQuery && (
           <div className="command-palette-results" style={styles.resultsContainer}>
-            {results.length > 0 ? (
+            {filteredCommands.length > 0 ? (
               <>
                 <div style={styles.resultsHeader}>
-                  {results.length} result{results.length !== 1 ? 's' : ''} found
+                  {filteredCommands.length} command{filteredCommands.length !== 1 ? 's' : ''} found
                 </div>
                 <div style={styles.resultsList}>
-                  {results.map((result, index) => {
-                    const actions = getFavoriteActions(result.type, {
-                      resourceName: result.name,
-                      namespace: result.namespace,
-                      resourceType: result.type,
-                    });
-
-                    const contextActions = getContextMenuActions(result.type, {
-                      resourceName: result.name,
-                      namespace: result.namespace,
-                      resourceType: result.type,
-                    });
-
+                  {filteredCommands.map((command, index) => {
+                    // Find the full resource object for detailed info
+                    const resource = resources.find(r => 
+                      r.type === command.resourceType && 
+                      r.name === command.resourceName && 
+                      r.namespace === command.namespace
+                    );
+                    
+                    const isSelected = index === selectedIndex;
+                    
                     return (
                       <div
-                        key={`${result.type}-${result.namespace}-${result.name}-${index}`}
-                        style={styles.resultItem}
+                        key={`${command.resourceType}-${command.namespace}-${command.resourceName}-${command.actionId}-${index}`}
+                        className="command-item"
+                        style={{
+                          ...styles.commandItem,
+                          ...(isSelected ? styles.commandItemSelected : {}),
+                        }}
+                        onClick={() => {
+                          onSelectResult(command.actionId, command.resourceType, command.resourceName, command.namespace);
+                          onClose();
+                          // Focus terminal after closing
+                          setTimeout(() => {
+                            const terminalElement = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+                            if (terminalElement) {
+                              terminalElement.focus();
+                            }
+                          }, 100);
+                        }}
+                        onMouseEnter={() => setSelectedIndex(index)}
                       >
-                        <div style={styles.resultHeader}>
-                          <div>
-                            <div style={styles.resultName}>{result.name}</div>
-                            <div style={styles.resultInfo}>
-                              <span style={styles.resultNamespace}>{result.namespace}</span>
-                              <span style={styles.resultType}>{result.info}</span>
-                            </div>
+                        <div style={styles.commandIcon}>{command.actionIcon}</div>
+                        <div style={styles.commandContent}>
+                          <div style={styles.commandTitle}>
+                            {command.actionLabel}: {command.resourceName}
                           </div>
-                        </div>
-                        <div style={styles.resultActions}>
-                          {actions.map((action) => (
-                            <button
-                              key={action.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onSelectResult(action.id, result.type, result.name, result.namespace);
-                                onClose();
-                              }}
-                              style={styles.actionButton}
-                              title={action.description}
-                            >
-                              {action.icon} {action.label}
-                            </button>
-                          ))}
-                          {/* More actions button */}
-                          {contextActions.length > 0 && onShowContextMenu && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onShowContextMenu(e.clientX, e.clientY, result.type, result.name, result.namespace);
-                                // Keep palette open when showing context menu
-                              }}
-                              style={styles.moreButton}
-                              title="More actions"
-                            >
-                              ⋯
-                            </button>
-                          )}
+                          <div style={styles.commandSubtitle}>
+                            <span style={styles.commandNamespace}>{command.namespace}</span>
+                            <span style={styles.commandSeparator}>•</span>
+                            <span style={styles.commandType}>{command.resourceType}</span>
+                            {resource?.info && (
+                              <>
+                                <span style={styles.commandSeparator}>•</span>
+                                <span style={styles.commandInfo}>{resource.info}</span>
+                              </>
+                            )}
+                          </div>
+                          <div style={styles.commandAction}>
+                            {command.actionDescription}
+                          </div>
                         </div>
                       </div>
                     );
@@ -166,23 +333,58 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
                 </div>
               </>
             ) : (
-              <div style={styles.noResults}>No resources found</div>
+              <div style={styles.noResults}>No commands found</div>
             )}
           </div>
         )}
 
-        {/* Help Text */}
+        {/* Instructions */}
         {!searchQuery && (
-          <div style={styles.helpText}>
-            <div style={styles.helpTitle}>Quick Search</div>
-            <div style={styles.helpItem}>
-              <span style={styles.helpKey}>Type</span> to search resources
+          <div style={styles.instructionsContainer}>
+            <div style={styles.instructionsTitle}>🎯 Quick Command Search</div>
+            <div style={styles.instructionsGrid}>
+              <div style={styles.instructionSection}>
+                <div style={styles.sectionTitle}>Search by Resource</div>
+                <div style={styles.exampleItem}>
+                  <code style={styles.exampleCode}>pod:nginx</code>
+                  <span style={styles.exampleDesc}>All actions for nginx pods</span>
+                </div>
+                <div style={styles.exampleItem}>
+                  <code style={styles.exampleCode}>deploy:api</code>
+                  <span style={styles.exampleDesc}>All actions for api deployments</span>
+                </div>
+              </div>
+              
+              <div style={styles.instructionSection}>
+                <div style={styles.sectionTitle}>Quick Actions</div>
+                <div style={styles.exampleItem}>
+                  <code style={styles.exampleCode}>logs@nginx</code>
+                  <span style={styles.exampleDesc}>Logs for nginx resources</span>
+                </div>
+                <div style={styles.exampleItem}>
+                  <code style={styles.exampleCode}>exec@api</code>
+                  <span style={styles.exampleDesc}>Exec into api resources</span>
+                </div>
+                <div style={styles.exampleItem}>
+                  <code style={styles.exampleCode}>@logs</code>
+                  <span style={styles.exampleDesc}>All logs actions</span>
+                </div>
+              </div>
+              
+              <div style={styles.instructionSection}>
+                <div style={styles.sectionTitle}>Combine Filters</div>
+                <div style={styles.exampleItem}>
+                  <code style={styles.exampleCode}>pod:nginx@logs</code>
+                  <span style={styles.exampleDesc}>Logs for nginx pods</span>
+                </div>
+                <div style={styles.exampleItem}>
+                  <code style={styles.exampleCode}>deploy:@scale</code>
+                  <span style={styles.exampleDesc}>Scale all deployments</span>
+                </div>
+              </div>
             </div>
-            <div style={styles.helpItem}>
-              <span style={styles.helpKey}>pod:nginx</span> to filter by type
-            </div>
-            <div style={styles.helpItem}>
-              <span style={styles.helpKey}>Esc</span> to close
+            <div style={styles.instructionsTip}>
+              💡 <strong>Tip:</strong> Just type any keyword to search everywhere • Press <kbd style={styles.kbd}>Esc</kbd> to close
             </div>
           </div>
         )}
@@ -261,6 +463,77 @@ const styles: Record<string, React.CSSProperties> = {
   resultsList: {
     padding: '8px',
   },
+  commandItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '10px',
+    padding: '8px 12px',
+    borderRadius: '3px',
+    marginBottom: '1px',
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
+  },
+  commandItemSelected: {
+    backgroundColor: '#094771',
+    border: '1px solid #0e639c',
+    marginLeft: '-1px',
+    marginRight: '-1px',
+    paddingLeft: '13px',
+    paddingRight: '13px',
+  },
+  commandIcon: {
+    fontSize: '16px',
+    flexShrink: 0,
+    width: '20px',
+    textAlign: 'center',
+  },
+  commandContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  commandTitle: {
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#cccccc',
+    marginBottom: '2px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  commandSubtitle: {
+    fontSize: '11px',
+    color: '#858585',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  commandNamespace: {
+    color: '#4ec9b0',
+    fontFamily: 'monospace',
+  },
+  commandType: {
+    color: '#858585',
+    textTransform: 'capitalize',
+  },
+  commandDescription: {
+    color: '#858585',
+  },
+  commandSeparator: {
+    color: '#3e3e42',
+  },
+  commandInfo: {
+    color: '#858585',
+    fontSize: '10px',
+  },
+  commandAction: {
+    fontSize: '10px',
+    color: '#6a9955',
+    marginTop: '2px',
+  },
   resultItem: {
     padding: '12px 16px',
     borderRadius: '4px',
@@ -322,30 +595,74 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#858585',
     fontSize: '13px',
   },
-  helpText: {
-    padding: '24px 16px',
-    color: '#858585',
+  instructionsContainer: {
+    padding: '20px',
+    backgroundColor: '#1e1e1e',
   },
-  helpTitle: {
-    fontSize: '13px',
+  instructionsTitle: {
+    fontSize: '15px',
     fontWeight: 600,
     color: '#cccccc',
     marginBottom: '16px',
+    textAlign: 'center',
   },
-  helpItem: {
-    fontSize: '12px',
+  instructionsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '16px',
+    marginBottom: '16px',
+  },
+  instructionSection: {
+    backgroundColor: '#252526',
+    padding: '12px',
+    borderRadius: '4px',
+    border: '1px solid #3e3e42',
+  },
+  sectionTitle: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#858585',
+    textTransform: 'uppercase',
     marginBottom: '8px',
-    display: 'flex',
-    alignItems: 'center',
+    letterSpacing: '0.5px',
   },
-  helpKey: {
-    padding: '2px 8px',
+  exampleItem: {
+    marginBottom: '6px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  exampleCode: {
+    padding: '3px 6px',
     backgroundColor: '#3c3c3c',
     border: '1px solid #3e3e42',
     borderRadius: '3px',
-    marginRight: '8px',
     fontFamily: 'monospace',
     fontSize: '11px',
+    color: '#4ec9b0',
+    display: 'inline-block',
+  },
+  exampleDesc: {
+    fontSize: '10px',
+    color: '#858585',
+    marginLeft: '2px',
+  },
+  instructionsTip: {
+    fontSize: '11px',
+    color: '#858585',
+    textAlign: 'center',
+    padding: '12px',
+    backgroundColor: '#252526',
+    borderRadius: '4px',
+    border: '1px solid #3e3e42',
+  },
+  kbd: {
+    padding: '2px 6px',
+    backgroundColor: '#3c3c3c',
+    border: '1px solid #3e3e42',
+    borderRadius: '3px',
+    fontFamily: 'monospace',
+    fontSize: '10px',
     color: '#cccccc',
   },
 };
