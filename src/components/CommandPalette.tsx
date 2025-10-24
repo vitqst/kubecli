@@ -10,10 +10,10 @@ interface CommandPaletteProps {
 }
 
 interface CommandItem {
-  type: 'resource-action';
-  resourceType: ResourceType;
-  resourceName: string;
-  namespace: string;
+  type: 'resource-action' | 'app-action';
+  resourceType?: ResourceType;
+  resourceName?: string;
+  namespace?: string;
   actionId: string;
   actionLabel: string;
   actionIcon: string;
@@ -44,12 +44,32 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Use global resource cache from context
-  const { resources, isLoading } = useResourceCache();
+  const { resources, isLoading, refresh } = useResourceCache();
   
   // Build ALL command items from ALL resources (memoized for performance)
   const allCommandItems = React.useMemo(() => {
     const items: CommandItem[] = [];
     
+    // Add app-level actions first
+    items.push({
+      type: 'app-action',
+      actionId: 'app:reload',
+      actionLabel: 'Reload Application',
+      actionIcon: '🔄',
+      actionDescription: 'Reload the entire application',
+      searchText: 'reload application refresh restart'.toLowerCase(),
+    });
+    
+    items.push({
+      type: 'app-action',
+      actionId: 'app:refresh-cache',
+      actionLabel: 'Refresh Resource Cache',
+      actionIcon: '♻️',
+      actionDescription: 'Refresh all cached Kubernetes resources',
+      searchText: 'refresh cache reload resources update'.toLowerCase(),
+    });
+    
+    // Add resource-based actions
     resources.forEach(resource => {
       // Get all actions (favorites + context menu)
       const favoriteActions = getFavoriteActions(resource.type, {
@@ -99,9 +119,15 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
       return allCommandItems.filter(item => {
         const actionMatches = item.actionLabel.toLowerCase().includes(actionFilter) || 
                              item.actionId.toLowerCase().includes(actionFilter);
+        
+        // App actions don't have resource names
+        if (item.type === 'app-action') {
+          return actionMatches;
+        }
+        
         const nameMatches = !nameFilter.trim() || 
-                           fuzzyMatch(item.resourceName, nameFilter.trim()) || 
-                           fuzzyMatch(item.namespace, nameFilter.trim());
+                           fuzzyMatch(item.resourceName!, nameFilter.trim()) || 
+                           fuzzyMatch(item.namespace!, nameFilter.trim());
         
         return actionMatches && nameMatches;
       }).slice(0, 20);
@@ -125,10 +151,13 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
       const [resourceType, name = ''] = beforeAt.split(':');
       
       return allCommandItems.filter(item => {
-        const typeMatches = item.resourceType.toLowerCase().includes(resourceType);
+        // Skip app actions for resource-specific syntax
+        if (item.type === 'app-action') return false;
+        
+        const typeMatches = item.resourceType!.toLowerCase().includes(resourceType);
         const nameMatches = !name || 
-                           fuzzyMatch(item.resourceName, name) ||
-                           fuzzyMatch(item.namespace, name);
+                           fuzzyMatch(item.resourceName!, name) ||
+                           fuzzyMatch(item.namespace!, name);
         const actionMatches = !actionFilter ||
                              item.actionLabel.toLowerCase().includes(actionFilter) ||
                              item.actionId.toLowerCase().includes(actionFilter);
@@ -144,10 +173,13 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
       const nameFilter = parts[1] || '';
       
       return allCommandItems.filter(item => {
-        const typeMatches = item.resourceType.toLowerCase().includes(resourceTypeFilter);
+        // Skip app actions for resource-specific syntax
+        if (item.type === 'app-action') return false;
+        
+        const typeMatches = item.resourceType!.toLowerCase().includes(resourceTypeFilter);
         const nameMatches = !nameFilter.trim() || 
-                           fuzzyMatch(item.resourceName, nameFilter.trim()) || 
-                           fuzzyMatch(item.namespace, nameFilter.trim());
+                           fuzzyMatch(item.resourceName!, nameFilter.trim()) || 
+                           fuzzyMatch(item.namespace!, nameFilter.trim());
         
         return typeMatches && nameMatches;
       }).slice(0, 20);
@@ -205,15 +237,30 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
         e.preventDefault();
         const selected = filteredCommands[selectedIndex];
         if (selected) {
-          onSelectResult(selected.actionId, selected.resourceType, selected.resourceName, selected.namespace);
-          onClose();
-          // Focus terminal after closing
-          setTimeout(() => {
-            const terminalElement = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
-            if (terminalElement) {
-              terminalElement.focus();
+          // Handle app-level actions
+          if (selected.type === 'app-action') {
+            if (selected.actionId === 'app:reload') {
+              // Cleanup terminals before reload
+              if (window.terminal) {
+                window.terminal.close('main').catch(console.error);
+              }
+              setTimeout(() => window.location.reload(), 100);
+            } else if (selected.actionId === 'app:refresh-cache') {
+              refresh();
             }
-          }, 100);
+            onClose();
+          } else {
+            // Handle resource actions
+            onSelectResult(selected.actionId, selected.resourceType!, selected.resourceName!, selected.namespace!);
+            onClose();
+            // Focus terminal after closing
+            setTimeout(() => {
+              const terminalElement = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+              if (terminalElement) {
+                terminalElement.focus();
+              }
+            }, 100);
+          }
         }
         return;
       }
@@ -221,7 +268,7 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, filteredCommands, selectedIndex, onSelectResult]);
+  }, [isOpen, onClose, filteredCommands, selectedIndex, onSelectResult, refresh]);
 
   // Click outside to close
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -288,50 +335,71 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
                 </div>
                 <div style={styles.resultsList}>
                   {filteredCommands.map((command, index) => {
-                    // Find the full resource object for detailed info
-                    const resource = resources.find(r => 
-                      r.type === command.resourceType && 
-                      r.name === command.resourceName && 
-                      r.namespace === command.namespace
-                    );
+                    // Find the full resource object for detailed info (only for resource actions)
+                    const resource = command.type === 'resource-action' 
+                      ? resources.find(r => 
+                          r.type === command.resourceType && 
+                          r.name === command.resourceName && 
+                          r.namespace === command.namespace
+                        )
+                      : null;
                     
                     const isSelected = index === selectedIndex;
                     
                     return (
                       <div
-                        key={`${command.resourceType}-${command.namespace}-${command.resourceName}-${command.actionId}-${index}`}
+                        key={`${command.type}-${command.actionId}-${index}`}
                         className="command-item"
                         style={{
                           ...styles.commandItem,
                           ...(isSelected ? styles.commandItemSelected : {}),
                         }}
                         onClick={() => {
-                          onSelectResult(command.actionId, command.resourceType, command.resourceName, command.namespace);
-                          onClose();
-                          // Focus terminal after closing
-                          setTimeout(() => {
-                            const terminalElement = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
-                            if (terminalElement) {
-                              terminalElement.focus();
+                          if (command.type === 'app-action') {
+                            if (command.actionId === 'app:reload') {
+                              // Cleanup terminals before reload
+                              if (window.terminal) {
+                                window.terminal.close('main').catch(console.error);
+                              }
+                              setTimeout(() => window.location.reload(), 100);
+                            } else if (command.actionId === 'app:refresh-cache') {
+                              refresh();
                             }
-                          }, 100);
+                            onClose();
+                          } else {
+                            onSelectResult(command.actionId, command.resourceType!, command.resourceName!, command.namespace!);
+                            onClose();
+                            // Focus terminal after closing
+                            setTimeout(() => {
+                              const terminalElement = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement;
+                              if (terminalElement) {
+                                terminalElement.focus();
+                              }
+                            }, 100);
+                          }
                         }}
                         onMouseEnter={() => setSelectedIndex(index)}
                       >
                         <div style={styles.commandIcon}>{command.actionIcon}</div>
                         <div style={styles.commandContent}>
                           <div style={styles.commandTitle}>
-                            {command.actionLabel}: {command.resourceName}
+                            {command.type === 'app-action' ? command.actionLabel : `${command.actionLabel}: ${command.resourceName}`}
                           </div>
                           <div style={styles.commandSubtitle}>
-                            <span style={styles.commandNamespace}>{command.namespace}</span>
-                            <span style={styles.commandSeparator}>•</span>
-                            <span style={styles.commandType}>{command.resourceType}</span>
-                            {resource?.info && (
+                            {command.type === 'resource-action' ? (
                               <>
+                                <span style={styles.commandNamespace}>{command.namespace}</span>
                                 <span style={styles.commandSeparator}>•</span>
-                                <span style={styles.commandInfo}>{resource.info}</span>
+                                <span style={styles.commandType}>{command.resourceType}</span>
+                                {resource?.info && (
+                                  <>
+                                    <span style={styles.commandSeparator}>•</span>
+                                    <span style={styles.commandInfo}>{resource.info}</span>
+                                  </>
+                                )}
                               </>
+                            ) : (
+                              <span style={styles.commandType}>Application</span>
                             )}
                           </div>
                           <div style={styles.commandAction}>
