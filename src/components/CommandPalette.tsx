@@ -21,6 +21,23 @@ interface CommandItem {
   searchText: string;
 }
 
+// Fuzzy match helper - checks if all characters in query appear in target in order
+function fuzzyMatch(target: string, query: string): boolean {
+  if (!query) return true;
+  
+  const targetLower = target.toLowerCase();
+  const queryLower = query.toLowerCase();
+  
+  let queryIndex = 0;
+  for (let i = 0; i < targetLower.length && queryIndex < queryLower.length; i++) {
+    if (targetLower[i] === queryLower[queryIndex]) {
+      queryIndex++;
+    }
+  }
+  
+  return queryIndex === queryLower.length;
+}
+
 export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextMenu }: CommandPaletteProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -83,8 +100,8 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
         const actionMatches = item.actionLabel.toLowerCase().includes(actionFilter) || 
                              item.actionId.toLowerCase().includes(actionFilter);
         const nameMatches = !nameFilter.trim() || 
-                           item.resourceName.toLowerCase().includes(nameFilter.trim()) || 
-                           item.namespace.toLowerCase().includes(nameFilter.trim());
+                           fuzzyMatch(item.resourceName, nameFilter.trim()) || 
+                           fuzzyMatch(item.namespace, nameFilter.trim());
         
         return actionMatches && nameMatches;
       }).slice(0, 20);
@@ -104,23 +121,17 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
     
     // Check for resource:name@action syntax (e.g., pod:nginx@logs)
     if (lowerQuery.includes('@')) {
-      const parts = lowerQuery.split('@');
-      const beforeAt = parts[0];
-      const actionFilter = parts[1] || '';
-      
-      // Parse the part before @
-      const colonParts = beforeAt.split(':');
-      const resourceTypeFilter = colonParts[0];
-      const nameFilter = colonParts[1] || '';
+      const [beforeAt, actionFilter = ''] = lowerQuery.split('@');
+      const [resourceType, name = ''] = beforeAt.split(':');
       
       return allCommandItems.filter(item => {
-        const typeMatches = item.resourceType.toLowerCase().includes(resourceTypeFilter);
-        const nameMatches = !nameFilter.trim() || 
-                           item.resourceName.toLowerCase().includes(nameFilter.trim()) || 
-                           item.namespace.toLowerCase().includes(nameFilter.trim());
-        const actionMatches = !actionFilter.trim() || 
-                             item.actionLabel.toLowerCase().includes(actionFilter.trim()) || 
-                             item.actionId.toLowerCase().includes(actionFilter.trim());
+        const typeMatches = item.resourceType.toLowerCase().includes(resourceType);
+        const nameMatches = !name || 
+                           fuzzyMatch(item.resourceName, name) ||
+                           fuzzyMatch(item.namespace, name);
+        const actionMatches = !actionFilter ||
+                             item.actionLabel.toLowerCase().includes(actionFilter) ||
+                             item.actionId.toLowerCase().includes(actionFilter);
         
         return typeMatches && nameMatches && actionMatches;
       }).slice(0, 20);
@@ -135,8 +146,8 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
       return allCommandItems.filter(item => {
         const typeMatches = item.resourceType.toLowerCase().includes(resourceTypeFilter);
         const nameMatches = !nameFilter.trim() || 
-                           item.resourceName.toLowerCase().includes(nameFilter.trim()) || 
-                           item.namespace.toLowerCase().includes(nameFilter.trim());
+                           fuzzyMatch(item.resourceName, nameFilter.trim()) || 
+                           fuzzyMatch(item.namespace, nameFilter.trim());
         
         return typeMatches && nameMatches;
       }).slice(0, 20);
