@@ -11,6 +11,9 @@ import { ErrorProvider } from './contexts/ErrorContext';
 import { ErrorBanner } from './components/ErrorBanner';
 import { CommandPalette } from './components/CommandPalette';
 
+// Import Tauri API (will be available globally via window.terminal, window.kube, etc.)
+import './tauri-api';
+
 // Fix for webpack asset relocator __dirname issue in renderer
 declare global {
   var __dirname: string;
