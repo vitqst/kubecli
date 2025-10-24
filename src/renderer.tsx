@@ -163,7 +163,7 @@ function App() {
   // This handler delegates to the resource action system instead of having
   // multiple specific handlers for each resource type and action
   const handleResourceAction = useCallback(
-    (actionId: string, resourceType: ResourceType, resourceName: string) => {
+    (actionId: string, resourceType: ResourceType, resourceName: string, customNamespace?: string) => {
       if (!window.terminal || !selectedNamespace) return;
       
       // Prevent actions when in edit mode
@@ -172,9 +172,12 @@ function App() {
         return;
       }
 
+      // Use custom namespace if provided (for resources like CronJobs), otherwise use selected namespace
+      const namespace = customNamespace || selectedNamespace;
+
       const context: ResourceActionContext = {
         resourceName,
-        namespace: selectedNamespace,
+        namespace,
         resourceType,
       };
 
@@ -387,7 +390,10 @@ function App() {
           {/* Terminal Top Bar */}
           <header style={styles.terminalHeader}>
             <button
-              onClick={() => setShowTerminal(false)}
+              onClick={() => {
+                setShowTerminal(false);
+                setIsInEditMode(false); // Reset edit mode when leaving terminal
+              }}
               style={styles.homeIconButton}
               className="home-icon-button"
               title="Go back to home"
@@ -553,7 +559,10 @@ function App() {
                   {/* Get Started Button */}
                   {contexts.length > 0 && selectedContext && (
                     <button
-                      onClick={() => setShowTerminal(true)}
+                      onClick={() => {
+                        setShowTerminal(true);
+                        setIsInEditMode(false); // Reset edit mode when entering terminal
+                      }}
                       style={styles.getStartedButton}
                       className="get-started-button"
                       disabled={disabled}

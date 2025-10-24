@@ -39,7 +39,7 @@ const triggerAction: ResourceAction = {
   label: 'Trigger',
   icon: '▶️',
   description: 'Create job from cronjob',
-  getCommand: (ctx) => kubectl(ctx.namespace, `create job --from=cronjobs/${ctx.resourceName} ${ctx.resourceName}-manual-$(date +%s) -n ${ctx.namespace}\n`),
+  getCommand: (ctx) => kubectl(ctx.namespace, `create job --from=cronjobs/${ctx.resourceName} ${ctx.resourceName}-manual-$(date +%s)\n`),
 };
 
 const suspendAction: ResourceAction = {

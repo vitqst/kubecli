@@ -54,7 +54,7 @@ interface TerminalSidebarProps {
   onConfigChange: (path: string) => void;
   onContextChange: (context: string) => void;
   onNamespaceChange: (namespace: string) => void;
-  onResourceAction: (actionId: string, resourceType: ResourceType, resourceName: string) => void;
+  onResourceAction: (actionId: string, resourceType: ResourceType, resourceName: string, customNamespace?: string) => void;
 }
 
 export function TerminalSidebar({
@@ -96,11 +96,12 @@ export function TerminalSidebar({
     y: number;
     resourceType: ResourceType;
     resourceName: string;
+    customNamespace?: string;
   } | null>(null);
 
   // Show context menu
-  const showContextMenu = useCallback((x: number, y: number, resourceType: ResourceType, resourceName: string) => {
-    setContextMenu({ x, y, resourceType, resourceName });
+  const showContextMenu = useCallback((x: number, y: number, resourceType: ResourceType, resourceName: string, customNamespace?: string) => {
+    setContextMenu({ x, y, resourceType, resourceName, customNamespace });
   }, []);
 
   // Close context menu
@@ -654,12 +655,12 @@ export function TerminalSidebar({
                             const [ns, name] = cj.name.split('/');
                             const favorites = getFavoriteActions('cronjob', {
                               resourceName: name,
-                              namespace: cj.namespace,
+                              namespace: ns,
                               resourceType: 'cronjob',
                             });
                             const contextActions = getContextMenuActions('cronjob', {
                               resourceName: name,
-                              namespace: cj.namespace,
+                              namespace: ns,
                               resourceType: 'cronjob',
                             });
                             return (
@@ -668,7 +669,7 @@ export function TerminalSidebar({
                                 {favorites.map((action) => (
                                   <button
                                     key={action.id}
-                                    onClick={() => onResourceAction(action.id, 'cronjob', name)}
+                                    onClick={() => onResourceAction(action.id, 'cronjob', name, ns)}
                                     style={isInEditMode ? {...styles.actionButton, ...styles.disabledButton} : styles.actionButton}
                                     title={isInEditMode ? 'Cannot perform actions while in edit mode' : action.description}
                                     disabled={isInEditMode}
@@ -681,7 +682,7 @@ export function TerminalSidebar({
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      showContextMenu(e.clientX, e.clientY, 'cronjob', name);
+                                      showContextMenu(e.clientX, e.clientY, 'cronjob', name, ns);
                                     }}
                                     style={isInEditMode ? {...styles.moreButton, ...styles.disabledButton} : styles.moreButton}
                                     title={isInEditMode ? 'Cannot perform actions while in edit mode' : 'More actions'}
@@ -718,14 +719,14 @@ export function TerminalSidebar({
         >
           {getContextMenuActions(contextMenu.resourceType, {
             resourceName: contextMenu.resourceName,
-            namespace: selectedNamespace,
+            namespace: contextMenu.customNamespace || selectedNamespace,
             resourceType: contextMenu.resourceType,
           }).map((action) => (
             <div
               key={action.id}
               style={styles.contextMenuItem}
               onClick={() => {
-                onResourceAction(action.id, contextMenu.resourceType, contextMenu.resourceName);
+                onResourceAction(action.id, contextMenu.resourceType, contextMenu.resourceName, contextMenu.customNamespace);
                 closeContextMenu();
               }}
               onMouseEnter={(e) => {

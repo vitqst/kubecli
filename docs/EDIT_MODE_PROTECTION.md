@@ -118,6 +118,7 @@ npm start
 
 - **Multiple terminals**: Each terminal tracks its own edit mode state independently
 - **Terminal cleanup**: Edit mode state is cleared when terminal is closed
+- **Navigation**: Edit mode is reset when navigating between home and terminal views
 - **Editor crashes**: Exit patterns detect when editor terminates
 - **Different editors**: Supports vim, vi, nano, and other common editors
 
