@@ -7,6 +7,8 @@ import { TerminalScreen } from './components/screens/TerminalScreen';
 import { ActionPromptDialog } from './components/ActionPromptDialog';
 import { ResourceType, getResourceDefinition, ResourceActionContext } from './resources';
 import { ResourceCacheProvider } from './contexts/ResourceCacheContext';
+import { ErrorProvider } from './contexts/ErrorContext';
+import { ErrorBanner } from './components/ErrorBanner';
 
 // Fix for webpack asset relocator __dirname issue in renderer
 declare global {
@@ -236,9 +238,11 @@ function App() {
   }, []);
 
   return (
-    <ResourceCacheProvider selectedContext={selectedContext} kubeconfigPath={kubeconfigPath}>
-      <div style={styles.container}>
-        <style>{`
+    <ErrorProvider>
+      <ResourceCacheProvider selectedContext={selectedContext} kubeconfigPath={kubeconfigPath}>
+        <ErrorBanner />
+        <div style={styles.container}>
+          <style>{`
           .home-icon-button:hover {
             background-color: #3e3e42 !important;
           }
@@ -288,19 +292,20 @@ function App() {
         />
       )}
 
-        {/* Action Prompt Dialog */}
-        {promptDialog && (
-          <ActionPromptDialog
-            title={promptDialog.title}
-            prompts={promptDialog.prompts}
-            confirmMessage={promptDialog.confirmMessage}
-            context={promptDialog.context}
-            onConfirm={handlePromptConfirm}
-            onCancel={handlePromptCancel}
-          />
-        )}
-      </div>
-    </ResourceCacheProvider>
+          {/* Action Prompt Dialog */}
+          {promptDialog && (
+            <ActionPromptDialog
+              title={promptDialog.title}
+              prompts={promptDialog.prompts}
+              confirmMessage={promptDialog.confirmMessage}
+              context={promptDialog.context}
+              onConfirm={handlePromptConfirm}
+              onCancel={handlePromptCancel}
+            />
+          )}
+        </div>
+      </ResourceCacheProvider>
+    </ErrorProvider>
   );
 }
 

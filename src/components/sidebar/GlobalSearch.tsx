@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { ResourceType, getFavoriteActions } from '../../resources';
+import { ResourceType, getFavoriteActions, getContextMenuActions } from '../../resources';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
 
 interface GlobalSearchProps {
   selectedContext: string;
   onSelectResult: (actionId: string, resourceType: ResourceType, resourceName: string, namespace: string) => void;
+  onShowContextMenu?: (x: number, y: number, resourceType: ResourceType, resourceName: string, namespace: string) => void;
 }
 
-export function GlobalSearch({ selectedContext, onSelectResult }: GlobalSearchProps) {
+export function GlobalSearch({ selectedContext, onSelectResult, onShowContextMenu }: GlobalSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   
@@ -60,6 +61,12 @@ export function GlobalSearch({ selectedContext, onSelectResult }: GlobalSearchPr
                     resourceType: result.type,
                   });
 
+                  const contextActions = getContextMenuActions(result.type, {
+                    resourceName: result.name,
+                    namespace: result.namespace,
+                    resourceType: result.type,
+                  });
+
                   return (
                     <div
                       key={`${result.type}-${result.namespace}-${result.name}-${index}`}
@@ -90,6 +97,21 @@ export function GlobalSearch({ selectedContext, onSelectResult }: GlobalSearchPr
                             {action.icon} {action.label}
                           </button>
                         ))}
+                        {/* More actions button */}
+                        {contextActions.length > 0 && onShowContextMenu && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onShowContextMenu(e.clientX, e.clientY, result.type, result.name, result.namespace);
+                              setSearchQuery('');
+                              setIsExpanded(false);
+                            }}
+                            style={styles.moreButton}
+                            title="More actions"
+                          >
+                            ⋯
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -187,6 +209,16 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#0e639c',
     color: '#ffffff',
     border: 'none',
+    borderRadius: '3px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
+  moreButton: {
+    padding: '4px 8px',
+    fontSize: '12px',
+    backgroundColor: '#3c3c3c',
+    color: '#cccccc',
+    border: '1px solid #3e3e42',
     borderRadius: '3px',
     cursor: 'pointer',
     transition: 'background-color 0.2s',

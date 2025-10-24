@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { ResourceType } from '../resources';
+import { useError } from './ErrorContext';
 
 export interface CachedResource {
   type: ResourceType;
@@ -66,6 +67,16 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Try to get error context, but don't fail if not available
+  let addError: ((error: any) => void) | undefined;
+  try {
+    const errorContext = useError();
+    addError = errorContext.addError;
+  } catch (e) {
+    // ErrorProvider not available, that's ok
+    addError = undefined;
+  }
 
   // Generate cache key from config + context
   const cacheKey = `${kubeconfigPath}::${selectedContext}`;
@@ -207,12 +218,31 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
       setLastUpdated(now);
       console.log(`[ResourceCache] Cached ${allResources.length} total resources for ${cacheKey}`);
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch resources';
       console.error('[ResourceCache] Failed to fetch resources:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch resources');
+      setError(errorMessage);
+      
+      // Show user-friendly error banner if error context is available
+      if (addError) {
+        addError({
+          message: 'Failed to load Kubernetes resources',
+          details: errorMessage.includes('auth') || errorMessage.includes('permission')
+            ? 'Authentication may have expired. Try switching contexts or reconfiguring kubectl.'
+            : errorMessage.includes('connection') || errorMessage.includes('timeout')
+            ? 'Cannot connect to cluster. Check your network and cluster status.'
+            : errorMessage,
+          severity: 'error',
+          dismissible: true,
+          action: {
+            label: 'Retry',
+            callback: () => fetchResources(),
+          },
+        });
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [selectedContext, cacheKey]);
+  }, [selectedContext, cacheKey, addError]);
 
   // Load from cache or fetch on mount and when context/config changes
   useEffect(() => {

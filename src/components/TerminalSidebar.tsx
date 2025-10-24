@@ -198,6 +198,7 @@ export function TerminalSidebar({
             onSelectResult={(actionId, resourceType, resourceName, namespace) => {
               onResourceAction(actionId, resourceType, resourceName, namespace);
             }}
+            onShowContextMenu={showContextMenu}
           />
 
           {/* Configuration Panel */}

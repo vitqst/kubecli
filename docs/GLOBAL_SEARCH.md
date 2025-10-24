@@ -176,10 +176,18 @@ SCHEDULE:.spec.schedule
 
 ## Keyboard Shortcuts
 
-Currently mouse-only. Future enhancements:
-- `↑` / `↓` - Navigate results
-- `Enter` - Select highlighted result
-- `Esc` - Close search results
+Currently mouse-only. **Context Menu Support:**
+- ✅ More actions button (⋯) on each result
+- ✅ Same context menu as sidebar lists
+- ✅ Access to all available actions
+- ✅ Consistent UX across search and lists
+
+**Future Enhancements:**
+- Keyboard navigation (↑↓ Enter Esc)
+- Search history
+- Filters by type/namespace
+- Fuzzy search
+- Favorites/Recents
 
 ## Benefits
 
