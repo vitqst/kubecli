@@ -4,6 +4,8 @@ import type { KubeConfigSummary, KubectlResult, KubeContext, KubeConfigFile } fr
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Terminal } from './components/Terminal';
 import { TerminalSidebar } from './components/TerminalSidebar';
+import { ActionPromptDialog } from './components/ActionPromptDialog';
+import { ResourceType, getResourceDefinition, ResourceActionContext } from './resources';
 
 // Fix for webpack asset relocator __dirname issue in renderer
 declare global {
@@ -40,6 +42,13 @@ function App() {
   const [selectedNamespace, setSelectedNamespace] = useState<string>('default');
   const [loadingNamespaces, setLoadingNamespaces] = useState<boolean>(false);
   const [isConfigChanging, setIsConfigChanging] = useState<boolean>(false);
+  const [promptDialog, setPromptDialog] = useState<{
+    actionId: string;
+    context: ResourceActionContext;
+    title: string;
+    prompts?: any[];
+    confirmMessage?: string;
+  } | null>(null);
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
@@ -144,25 +153,84 @@ function App() {
     }, 50);
   }, [selectedContext]);
 
-  // Handle view pod - show YAML in terminal
-  const handleViewPod = useCallback((podName: string) => {
-    if (window.terminal && selectedNamespace) {
-      const command = `kubectl get pod ${podName} -n ${selectedNamespace} -o yaml\n`;
-      window.terminal.write('main', command).catch((error) => {
-        console.error('Failed to write view command:', error);
-      });
-    }
-  }, [selectedNamespace]);
+  // Generic resource action handler - SOLID principle: Single Responsibility
+  // This handler delegates to the resource action system instead of having
+  // multiple specific handlers for each resource type and action
+  const handleResourceAction = useCallback(
+    (actionId: string, resourceType: ResourceType, resourceName: string) => {
+      if (!window.terminal || !selectedNamespace) return;
 
-  // Handle edit pod - open in kubectl edit
-  const handleEditPod = useCallback((podName: string) => {
-    if (window.terminal && selectedNamespace) {
-      const command = `kubectl edit pod ${podName} -n ${selectedNamespace}\n`;
+      const context: ResourceActionContext = {
+        resourceName,
+        namespace: selectedNamespace,
+        resourceType,
+      };
+
+      // Get the resource definition and action
+      const resource = getResourceDefinition(resourceType);
+      if (!resource) {
+        console.warn(`Resource type "${resourceType}" not found`);
+        return;
+      }
+
+      const action = resource.getActions().find(a => a.id === actionId);
+      if (!action) {
+        console.warn(`Action "${actionId}" not found for resource type "${resourceType}"`);
+        return;
+      }
+
+      // Check if action requires prompts or confirmation
+      if (action.prompts || action.confirmMessage) {
+        const confirmMsg = typeof action.confirmMessage === 'function'
+          ? action.confirmMessage(context)
+          : action.confirmMessage;
+
+        setPromptDialog({
+          actionId,
+          context,
+          title: `${action.label} - ${resourceName}`,
+          prompts: action.prompts,
+          confirmMessage: confirmMsg,
+        });
+        return;
+      }
+
+      // Execute action directly if no prompts needed
+      executeAction(actionId, context, {});
+    },
+    [selectedNamespace]
+  );
+
+  // Execute action with prompt values
+  const executeAction = useCallback((actionId: string, context: ResourceActionContext, promptValues: Record<string, any>) => {
+    if (!window.terminal) return;
+
+    const resource = getResourceDefinition(context.resourceType);
+    if (!resource) return;
+
+    const action = resource.getActions().find(a => a.id === actionId);
+    if (!action) return;
+
+    const command = action.getCommand(context, promptValues);
+    if (command) {
       window.terminal.write('main', command).catch((error) => {
-        console.error('Failed to write edit command:', error);
+        console.error(`Failed to execute ${actionId} on ${context.resourceType} ${context.resourceName}:`, error);
       });
     }
-  }, [selectedNamespace]);
+  }, []);
+
+  // Handle prompt dialog confirm
+  const handlePromptConfirm = useCallback((values: Record<string, any>) => {
+    if (promptDialog) {
+      executeAction(promptDialog.actionId, promptDialog.context, values);
+      setPromptDialog(null);
+    }
+  }, [promptDialog, executeAction]);
+
+  // Handle prompt dialog cancel
+  const handlePromptCancel = useCallback(() => {
+    setPromptDialog(null);
+  }, []);
 
   const handleContextChange = useCallback(
     async (nextContext: string) => {
@@ -336,8 +404,7 @@ function App() {
               onConfigChange={handleConfigChange}
               onContextChange={handleContextChange}
               onNamespaceChange={handleNamespaceChange}
-              onViewPod={handleViewPod}
-              onEditPod={handleEditPod}
+              onResourceAction={handleResourceAction}
             />
             <div style={styles.terminalMain}>
               <Terminal 
@@ -488,6 +555,18 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Action Prompt Dialog */}
+      {promptDialog && (
+        <ActionPromptDialog
+          title={promptDialog.title}
+          prompts={promptDialog.prompts}
+          confirmMessage={promptDialog.confirmMessage}
+          context={promptDialog.context}
+          onConfirm={handlePromptConfirm}
+          onCancel={handlePromptCancel}
+        />
       )}
     </div>
   );

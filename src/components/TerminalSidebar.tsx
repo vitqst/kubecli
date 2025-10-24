@@ -1,4 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  ResourceType, 
+  getFavoriteActions,
+  getContextMenuActions,
+} from '../resources';
 
 interface Pod {
   name: string;
@@ -47,8 +52,7 @@ interface TerminalSidebarProps {
   onConfigChange: (path: string) => void;
   onContextChange: (context: string) => void;
   onNamespaceChange: (namespace: string) => void;
-  onViewPod: (podName: string) => void;
-  onEditPod: (podName: string) => void;
+  onResourceAction: (actionId: string, resourceType: ResourceType, resourceName: string) => void;
 }
 
 export function TerminalSidebar({
@@ -62,8 +66,7 @@ export function TerminalSidebar({
   onConfigChange,
   onContextChange,
   onNamespaceChange,
-  onViewPod,
-  onEditPod,
+  onResourceAction,
 }: TerminalSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [pods, setPods] = useState<Pod[]>([]);
@@ -85,6 +88,31 @@ export function TerminalSidebar({
     deployments: false,
     cronjobs: false,
   });
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    resourceType: ResourceType;
+    resourceName: string;
+  } | null>(null);
+
+  // Show context menu
+  const showContextMenu = useCallback((x: number, y: number, resourceType: ResourceType, resourceName: string) => {
+    setContextMenu({ x, y, resourceType, resourceName });
+  }, []);
+
+  // Close context menu
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    if (contextMenu) {
+      const handleClick = () => closeContextMenu();
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu, closeContextMenu]);
 
   // Load pods when namespace or context changes
   const loadPods = useCallback(async () => {
@@ -414,20 +442,40 @@ export function TerminalSidebar({
                           </span>
                         </div>
                         <div style={styles.podActions}>
-                          <button
-                            onClick={() => onViewPod(pod.name)}
-                            style={styles.actionButton}
-                            title="View pod YAML"
-                          >
-                            👁️ View
-                          </button>
-                          <button
-                            onClick={() => onEditPod(pod.name)}
-                            style={styles.actionButton}
-                            title="Edit pod"
-                          >
-                            ✏️ Edit
-                          </button>
+                          {/* Favorite actions */}
+                          {getFavoriteActions('pod', {
+                            resourceName: pod.name,
+                            namespace: selectedNamespace,
+                            resourceType: 'pod',
+                          }).map((action) => (
+                            <button
+                              key={action.id}
+                              onClick={() => onResourceAction(action.id, 'pod', pod.name)}
+                              style={styles.actionButton}
+                              title={action.description}
+                            >
+                              {action.icon} {action.label}
+                            </button>
+                          ))}
+                          {/* More actions button */}
+                          {getContextMenuActions('pod', {
+                            resourceName: pod.name,
+                            namespace: selectedNamespace,
+                            resourceType: 'pod',
+                          }).length > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Show context menu
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                showContextMenu(e.clientX, e.clientY, 'pod', pod.name);
+                              }}
+                              style={styles.moreButton}
+                              title="More actions"
+                            >
+                              ⋯
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -487,20 +535,38 @@ export function TerminalSidebar({
                           </span>
                         </div>
                         <div style={styles.podActions}>
-                          <button
-                            onClick={() => onViewPod(dep.name)}
-                            style={styles.actionButton}
-                            title="View deployment YAML"
-                          >
-                            👁️ View
-                          </button>
-                          <button
-                            onClick={() => onEditPod(dep.name)}
-                            style={styles.actionButton}
-                            title="Edit deployment"
-                          >
-                            ✏️ Edit
-                          </button>
+                          {/* Favorite actions */}
+                          {getFavoriteActions('deployment', {
+                            resourceName: dep.name,
+                            namespace: selectedNamespace,
+                            resourceType: 'deployment',
+                          }).map((action) => (
+                            <button
+                              key={action.id}
+                              onClick={() => onResourceAction(action.id, 'deployment', dep.name)}
+                              style={styles.actionButton}
+                              title={action.description}
+                            >
+                              {action.icon} {action.label}
+                            </button>
+                          ))}
+                          {/* More actions button */}
+                          {getContextMenuActions('deployment', {
+                            resourceName: dep.name,
+                            namespace: selectedNamespace,
+                            resourceType: 'deployment',
+                          }).length > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                showContextMenu(e.clientX, e.clientY, 'deployment', dep.name);
+                              }}
+                              style={styles.moreButton}
+                              title="More actions"
+                            >
+                              ⋯
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -569,30 +635,47 @@ export function TerminalSidebar({
                           </span>
                         </div>
                         <div style={styles.podActions}>
-                          <button
-                            onClick={() => {
-                              const [ns, name] = cj.name.split('/');
-                              if (window.terminal) {
-                                window.terminal.write('main', `kubectl get cronjob ${name} -n ${ns} -o yaml\n`);
-                              }
-                            }}
-                            style={styles.actionButton}
-                            title="View cronjob YAML"
-                          >
-                            👁️ View
-                          </button>
-                          <button
-                            onClick={() => {
-                              const [ns, name] = cj.name.split('/');
-                              if (window.terminal) {
-                                window.terminal.write('main', `kubectl edit cronjob ${name} -n ${ns}\n`);
-                              }
-                            }}
-                            style={styles.actionButton}
-                            title="Edit cronjob"
-                          >
-                            ✏️ Edit
-                          </button>
+                          {(() => {
+                            const [ns, name] = cj.name.split('/');
+                            const favorites = getFavoriteActions('cronjob', {
+                              resourceName: name,
+                              namespace: ns,
+                              resourceType: 'cronjob',
+                            });
+                            const contextActions = getContextMenuActions('cronjob', {
+                              resourceName: name,
+                              namespace: ns,
+                              resourceType: 'cronjob',
+                            });
+                            return (
+                              <>
+                                {/* Favorite actions */}
+                                {favorites.map((action) => (
+                                  <button
+                                    key={action.id}
+                                    onClick={() => onResourceAction(action.id, 'cronjob', name)}
+                                    style={styles.actionButton}
+                                    title={action.description}
+                                  >
+                                    {action.icon} {action.label}
+                                  </button>
+                                ))}
+                                {/* More actions button */}
+                                {contextActions.length > 0 && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      showContextMenu(e.clientX, e.clientY, 'cronjob', name);
+                                    }}
+                                    style={styles.moreButton}
+                                    title="More actions"
+                                  >
+                                    ⋯
+                                  </button>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     ))}
@@ -603,6 +686,42 @@ export function TerminalSidebar({
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          style={{
+            ...styles.contextMenu,
+            left: `${contextMenu.x}px`,
+            top: `${contextMenu.y}px`,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {getContextMenuActions(contextMenu.resourceType, {
+            resourceName: contextMenu.resourceName,
+            namespace: selectedNamespace,
+            resourceType: contextMenu.resourceType,
+          }).map((action) => (
+            <div
+              key={action.id}
+              style={styles.contextMenuItem}
+              onClick={() => {
+                onResourceAction(action.id, contextMenu.resourceType, contextMenu.resourceName);
+                closeContextMenu();
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#094771';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              <span style={styles.contextMenuIcon}>{action.icon}</span>
+              <span style={styles.contextMenuLabel}>{action.label}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -816,5 +935,41 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     borderRadius: '3px',
     cursor: 'pointer',
+  },
+  moreButton: {
+    padding: '4px 8px',
+    fontSize: '14px',
+    backgroundColor: '#3c3c3c',
+    color: '#cccccc',
+    border: '1px solid #3e3e42',
+    borderRadius: '3px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+  },
+  contextMenu: {
+    position: 'fixed',
+    backgroundColor: '#2d2d30',
+    border: '1px solid #454545',
+    borderRadius: '4px',
+    padding: '4px 0',
+    zIndex: 10000,
+    minWidth: '180px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+  },
+  contextMenuItem: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '8px 12px',
+    cursor: 'pointer',
+    color: '#cccccc',
+    fontSize: '13px',
+    transition: 'background-color 0.1s',
+  },
+  contextMenuIcon: {
+    marginRight: '8px',
+    fontSize: '14px',
+  },
+  contextMenuLabel: {
+    flex: 1,
   },
 };
