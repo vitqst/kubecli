@@ -124,27 +124,34 @@ export function TerminalSidebar({
     
     setLoadingPods(true);
     try {
+      // Use custom-columns for faster parsing (no JSON overhead)
       const result = await window.kube.runCommand(
         selectedContext,
-        `get pods -n ${selectedNamespace} -o json`
+        `get pods -n ${selectedNamespace} --no-headers -o custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[*].ready,TOTAL:.status.containerStatuses[*].name,STATUS:.status.phase,RESTARTS:.status.containerStatuses[*].restartCount,AGE:.metadata.creationTimestamp`
       );
       
       if (result.code === 0 && result.stdout) {
-        const data = JSON.parse(result.stdout);
-        const podList: Pod[] = data.items.map((item: any) => {
-          const containerStatuses = item.status.containerStatuses || [];
-          const readyCount = containerStatuses.filter((c: any) => c.ready).length;
-          const totalCount = containerStatuses.length;
-          const restarts = containerStatuses.reduce((sum: number, c: any) => sum + (c.restartCount || 0), 0);
+        const lines = result.stdout.trim().split('\n').filter(line => line.trim());
+        const podList: Pod[] = lines.map(line => {
+          const parts = line.split(/\s+/);
+          if (parts.length < 6) return null;
           
-          return {
-            name: item.metadata.name,
-            ready: `${readyCount}/${totalCount}`,
-            status: item.status.phase,
-            restarts,
-            age: calculateAge(item.metadata.creationTimestamp),
-          };
-        });
+          const [name, readyStr, totalStr, status, restartsStr, ageStr] = parts;
+          
+          // Parse ready count (true,false,true -> 2/3)
+          const readyArr = readyStr.split(',').filter(r => r === 'true');
+          const totalArr = totalStr.split(',');
+          const ready = `${readyArr.length}/${totalArr.length}`;
+          
+          // Parse restarts (sum of all containers)
+          const restarts = restartsStr.split(',').reduce((sum, r) => sum + (parseInt(r) || 0), 0);
+          
+          // Calculate age
+          const age = calculateAge(ageStr);
+          
+          return { name, ready, status, restarts, age };
+        }).filter((pod): pod is Pod => pod !== null);
+        
         setPods(podList);
         setLoadedSections(prev => ({ ...prev, pods: true }));
       }
@@ -162,25 +169,35 @@ export function TerminalSidebar({
     
     setLoadingDeployments(true);
     try {
+      // Use custom-columns for faster parsing (no JSON overhead)
       const result = await window.kube.runCommand(
         selectedContext,
-        `get deployments -n ${selectedNamespace} -o json`
+        `get deployments -n ${selectedNamespace} --no-headers -o custom-columns=NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas,UPTODATE:.status.updatedReplicas,AVAILABLE:.status.availableReplicas,AGE:.metadata.creationTimestamp`
       );
       
       if (result.code === 0 && result.stdout) {
-        const data = JSON.parse(result.stdout);
-        const deploymentList: Deployment[] = data.items.map((item: any) => {
-          const ready = item.status.readyReplicas || 0;
-          const desired = item.spec.replicas || 0;
+        const lines = result.stdout.trim().split('\n').filter(line => line.trim());
+        const deploymentList: Deployment[] = lines.map(line => {
+          const parts = line.split(/\s+/);
+          if (parts.length < 6) return null;
+          
+          const [name, readyStr, desiredStr, upToDateStr, availableStr, ageStr] = parts;
+          
+          const ready = parseInt(readyStr) || 0;
+          const desired = parseInt(desiredStr) || 0;
+          const upToDate = parseInt(upToDateStr) || 0;
+          const available = parseInt(availableStr) || 0;
+          const age = calculateAge(ageStr);
           
           return {
-            name: item.metadata.name,
+            name,
             ready: `${ready}/${desired}`,
-            upToDate: item.status.updatedReplicas || 0,
-            available: item.status.availableReplicas || 0,
-            age: calculateAge(item.metadata.creationTimestamp),
+            upToDate,
+            available,
+            age,
           };
-        });
+        }).filter((dep): dep is Deployment => dep !== null);
+        
         setDeployments(deploymentList);
         setLoadedSections(prev => ({ ...prev, deployments: true }));
       }
@@ -198,27 +215,36 @@ export function TerminalSidebar({
     
     setLoadingCronJobs(true);
     try {
-      // hardcode namespace for now because cronjobs al
+      // Use custom-columns for faster parsing (no JSON overhead)
       const result = await window.kube.runCommand(
         selectedContext,
-        `get cronjobs -A -o json`
+        `get cronjobs -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,SCHEDULE:.spec.schedule,SUSPEND:.spec.suspend,ACTIVE:.status.active,LASTSCHEDULE:.status.lastScheduleTime`
       );
       
       if (result.code === 0 && result.stdout) {
-        const data = JSON.parse(result.stdout);
-        const cronJobList: CronJob[] = data.items.map((item: any) => {
-          const lastScheduleTime = item.status.lastScheduleTime;
-          const lastSchedule = lastScheduleTime ? calculateAge(lastScheduleTime) + ' ago' : 'Never';
+        const lines = result.stdout.trim().split('\n').filter(line => line.trim());
+        const cronJobList: CronJob[] = lines.map(line => {
+          const parts = line.split(/\s+/);
+          if (parts.length < 6) return null;
+          
+          const [namespace, name, schedule, suspendStr, activeStr, lastScheduleStr] = parts;
+          
+          const suspend = suspendStr === 'true';
+          const active = parseInt(activeStr) || 0;
+          const lastSchedule = lastScheduleStr && lastScheduleStr !== '<none>' 
+            ? calculateAge(lastScheduleStr) + ' ago' 
+            : 'Never';
           
           return {
-            name: `${item.metadata.namespace}/${item.metadata.name}`,
-            namespace: item.metadata.namespace,
-            schedule: item.spec.schedule,
-            suspend: item.spec.suspend || false,
-            active: item.status.active?.length || 0,
+            name: `${namespace}/${name}`,
+            namespace,
+            schedule,
+            suspend,
+            active,
             lastSchedule,
           };
-        });
+        }).filter((cj): cj is CronJob => cj !== null);
+        
         setCronJobs(cronJobList);
         setLoadedSections(prev => ({ ...prev, cronjobs: true }));
       }

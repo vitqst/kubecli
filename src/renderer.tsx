@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, memo } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { KubeConfigSummary, KubectlResult, KubeContext, KubeConfigFile } from './common/kubeTypes';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -6,6 +6,59 @@ import { Terminal } from './components/Terminal';
 import { TerminalSidebar } from './components/TerminalSidebar';
 import { ActionPromptDialog } from './components/ActionPromptDialog';
 import { ResourceType, getResourceDefinition, ResourceActionContext } from './resources';
+
+// Memoized Memory Display Component to prevent re-rendering entire app
+const MemoryDisplay = memo(() => {
+  const [memoryUsage, setMemoryUsage] = useState<{ used: number; total: number }>({ used: 0, total: 0 });
+
+  useEffect(() => {
+    const updateMemory = () => {
+      if (performance && (performance as any).memory) {
+        const memory = (performance as any).memory;
+        setMemoryUsage({
+          used: memory.usedJSHeapSize,
+          total: memory.jsHeapSizeLimit,
+        });
+      }
+    };
+
+    updateMemory();
+    const interval = setInterval(updateMemory, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (memoryUsage.total === 0) return null;
+
+  const usedMB = (memoryUsage.used / 1024 / 1024).toFixed(1);
+  const totalMB = (memoryUsage.total / 1024 / 1024).toFixed(0);
+  const percentage = (memoryUsage.used / memoryUsage.total) * 100;
+  const color = percentage > 90 ? '#f48771' : percentage > 70 ? '#dcdcaa' : '#4ec9b0';
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      padding: '4px 12px',
+      backgroundColor: '#1e1e1e',
+      borderRadius: '4px',
+      border: '1px solid #3e3e42',
+    }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+        <path d="M4 6h16M4 12h16M4 18h16"></path>
+      </svg>
+      <span style={{
+        fontSize: '0.75rem',
+        fontFamily: 'monospace',
+        fontWeight: 500,
+        color,
+      }}>
+        RAM: {usedMB} / {totalMB} MB ({percentage.toFixed(1)}%)
+      </span>
+    </div>
+  );
+});
+
+MemoryDisplay.displayName = 'MemoryDisplay';
 
 // Fix for webpack asset relocator __dirname issue in renderer
 declare global {
@@ -407,6 +460,7 @@ function App() {
               <span style={styles.configLabel}>Config:</span>
               <span style={styles.configPath}>{kubeconfigPath}</span>
             </div>
+            <MemoryDisplay />
           </header>
           
           {/* Terminal Content */}
