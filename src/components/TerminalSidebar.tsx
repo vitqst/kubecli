@@ -90,7 +90,7 @@ export function TerminalSidebar({
   onResourceAction,
 }: TerminalSidebarProps) {
   // Use global resource cache from context
-  const { filterByType, filterByNamespace, isLoading: cacheLoading } = useResourceCache();
+  const { filterByType, filterByNamespace, isLoading: cacheLoading, refresh: refreshCache } = useResourceCache();
 
   // State
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -225,7 +225,7 @@ export function TerminalSidebar({
             isInEditMode={isInEditMode}
             resourceType="pod"
             onToggle={() => toggleSection('pods')}
-            onRefresh={() => {}}
+            onRefresh={refreshCache}
             onResourceAction={onResourceAction}
             onShowContextMenu={showContextMenu}
             renderItem={(pod) => ({
@@ -252,7 +252,7 @@ export function TerminalSidebar({
             isInEditMode={isInEditMode}
             resourceType="deployment"
             onToggle={() => toggleSection('deployments')}
-            onRefresh={() => {}}
+            onRefresh={refreshCache}
             onResourceAction={onResourceAction}
             onShowContextMenu={showContextMenu}
             renderItem={(dep) => ({
@@ -279,7 +279,7 @@ export function TerminalSidebar({
             isInEditMode={isInEditMode}
             resourceType="cronjob"
             onToggle={() => toggleSection('cronjobs')}
-            onRefresh={() => {}}
+            onRefresh={refreshCache}
             onResourceAction={onResourceAction}
             onShowContextMenu={showContextMenu}
             renderItem={(cj) => {

@@ -236,7 +236,7 @@ function App() {
   }, []);
 
   return (
-    <ResourceCacheProvider selectedContext={selectedContext}>
+    <ResourceCacheProvider selectedContext={selectedContext} kubeconfigPath={kubeconfigPath}>
       <div style={styles.container}>
         <style>{`
           .home-icon-button:hover {
