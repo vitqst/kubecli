@@ -291,11 +291,30 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     }
   }, [selectedContext, cacheKey, fetchResources]);
 
-  // Search through cached resources
+  // Search through cached resources with smart type filtering
   const search = useCallback((query: string): CachedResource[] => {
     if (!query.trim()) return [];
 
     const lowerQuery = query.toLowerCase();
+    
+    // Check for type filter syntax: "type:query" or "type: query"
+    const typeFilterMatch = lowerQuery.match(/^(\w+):\s*(.*)$/);
+    
+    if (typeFilterMatch) {
+      const [, typeFilter, nameQuery] = typeFilterMatch;
+      
+      // Filter by type first, then by name
+      return resources.filter(resource => {
+        const typeMatches = resource.type.toLowerCase().includes(typeFilter);
+        const nameMatches = nameQuery 
+          ? resource.name.toLowerCase().includes(nameQuery) ||
+            resource.namespace.toLowerCase().includes(nameQuery)
+          : true;
+        return typeMatches && nameMatches;
+      }).slice(0, 20);
+    }
+    
+    // Default search: search in name, namespace, and type
     return resources.filter(resource =>
       resource.name.toLowerCase().includes(lowerQuery) ||
       resource.namespace.toLowerCase().includes(lowerQuery) ||

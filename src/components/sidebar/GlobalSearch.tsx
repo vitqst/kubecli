@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ResourceType, getFavoriteActions, getContextMenuActions } from '../../resources';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
 
@@ -11,6 +11,7 @@ interface GlobalSearchProps {
 export function GlobalSearch({ selectedContext, onSelectResult, onShowContextMenu }: GlobalSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Use global resource cache from context
   const { search, isLoading } = useResourceCache();
@@ -18,13 +19,53 @@ export function GlobalSearch({ selectedContext, onSelectResult, onShowContextMen
   // Get search results from cache
   const results = searchQuery ? search(searchQuery) : [];
 
+  // Keyboard shortcut: Ctrl+F to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+F or Cmd+F (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setIsExpanded(true);
+      }
+      
+      // Escape to clear and blur
+      if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        setSearchQuery('');
+        setIsExpanded(false);
+        searchInputRef.current?.blur();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <div style={styles.container}>
+      {/* Custom Scrollbar Styles */}
+      <style>{`
+        .global-search-results::-webkit-scrollbar {
+          width: 10px;
+        }
+        .global-search-results::-webkit-scrollbar-track {
+          background: #1e1e1e;
+        }
+        .global-search-results::-webkit-scrollbar-thumb {
+          background: #424242;
+          border-radius: 5px;
+        }
+        .global-search-results::-webkit-scrollbar-thumb:hover {
+          background: #4e4e4e;
+        }
+      `}</style>
+      
       {/* Search Input */}
       <div style={styles.searchBox}>
         <input
+          ref={searchInputRef}
           type="text"
-          placeholder={isLoading ? "🔄 Loading resources..." : "🔍 Search all resources..."}
+          placeholder={isLoading ? "🔄 Loading resources..." : "🔍 Search resources (try: pod:nginx or cron:backup)"}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onFocus={() => setIsExpanded(true)}
@@ -47,7 +88,7 @@ export function GlobalSearch({ selectedContext, onSelectResult, onShowContextMen
 
       {/* Search Results */}
       {isExpanded && (searchQuery || results.length > 0) && (
-        <div style={styles.resultsContainer}>
+        <div className="global-search-results" style={styles.resultsContainer}>
           {results.length > 0 ? (
             <>
               <div style={styles.resultsHeader}>
@@ -103,8 +144,7 @@ export function GlobalSearch({ selectedContext, onSelectResult, onShowContextMen
                             onClick={(e) => {
                               e.stopPropagation();
                               onShowContextMenu(e.clientX, e.clientY, result.type, result.name, result.namespace);
-                              setSearchQuery('');
-                              setIsExpanded(false);
+                              // Keep search open when showing context menu
                             }}
                             style={styles.moreButton}
                             title="More actions"
@@ -168,6 +208,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     maxHeight: '400px',
     overflowY: 'auto',
+    scrollbarGutter: 'stable', // Reserve space for scrollbar to prevent layout shift
     zIndex: 1000,
     boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
   },

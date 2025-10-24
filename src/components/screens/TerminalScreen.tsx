@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo } from 'react';
 import { Terminal } from '../Terminal';
 import { TerminalSidebar } from '../TerminalSidebar';
 import { ResourceType } from '../../resources';
@@ -91,6 +91,12 @@ export function TerminalScreen({
   onEditModeChange,
   onGoHome,
 }: TerminalScreenProps) {
+  // Memoize env object to prevent unnecessary terminal refreshes
+  const terminalEnv = useMemo(() => ({
+    KUBECONFIG: kubeconfigPath,
+    KUBECTL_NAMESPACE: selectedNamespace
+  }), [kubeconfigPath, selectedNamespace]);
+
   return (
     <>
       {/* Terminal Top Bar */}
@@ -132,10 +138,7 @@ export function TerminalScreen({
         <div style={styles.terminalMain}>
           <Terminal 
             id="main"
-            env={{ 
-              KUBECONFIG: kubeconfigPath,
-              KUBECTL_NAMESPACE: selectedNamespace 
-            }}
+            env={terminalEnv}
             isLoading={isConfigChanging}
             onEditModeChange={onEditModeChange}
           />

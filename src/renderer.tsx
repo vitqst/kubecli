@@ -9,6 +9,7 @@ import { ResourceType, getResourceDefinition, ResourceActionContext } from './re
 import { ResourceCacheProvider } from './contexts/ResourceCacheContext';
 import { ErrorProvider } from './contexts/ErrorContext';
 import { ErrorBanner } from './components/ErrorBanner';
+import { CommandPalette } from './components/CommandPalette';
 
 // Fix for webpack asset relocator __dirname issue in renderer
 declare global {
@@ -43,6 +44,7 @@ function App() {
     confirmMessage?: string;
   } | null>(null);
   const [isInEditMode, setIsInEditMode] = useState<boolean>(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
@@ -70,6 +72,20 @@ function App() {
     } finally {
       setLoadingNamespaces(false);
     }
+  }, []);
+
+  // Keyboard shortcut: Ctrl+P to open command palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+P or Cmd+P (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Load initial contexts
@@ -259,6 +275,24 @@ function App() {
           .home-card {
             animation: fadeIn 0.4s ease-out;
           }
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+            }
+            to {
+              opacity: 1;
+            }
+          }
+          @keyframes slideDown {
+            from {
+              opacity: 0;
+              transform: translateY(-20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
         `}</style>
         
         {showTerminal ? (
@@ -291,6 +325,13 @@ function App() {
           onGetStarted={handleGetStarted}
         />
       )}
+
+          {/* Command Palette */}
+          <CommandPalette
+            isOpen={isCommandPaletteOpen}
+            onClose={() => setIsCommandPaletteOpen(false)}
+            onSelectResult={handleResourceAction}
+          />
 
           {/* Action Prompt Dialog */}
           {promptDialog && (

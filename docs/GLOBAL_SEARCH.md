@@ -176,7 +176,33 @@ SCHEDULE:.spec.schedule
 
 ## Keyboard Shortcuts
 
-Currently mouse-only. **Context Menu Support:**
+### Ctrl+F (Cmd+F on Mac)
+- **Quick focus** to search input
+- Works from anywhere in the app
+- Automatically expands search dropdown
+- Prevents browser's default find behavior
+
+### Escape (Esc)
+- **Clear search** and close dropdown
+- Blur search input
+- Return focus to main app
+
+**Usage:**
+```
+1. Press Ctrl+F (or Cmd+F)
+   → Search input focused
+   → Dropdown expanded
+   
+2. Type search query
+   → See results instantly
+   
+3. Press Escape
+   → Search cleared
+   → Dropdown closed
+   → Focus returned
+```
+
+**Context Menu Support:**
 - ✅ More actions button (⋯) on each result
 - ✅ Same context menu as sidebar lists
 - ✅ Access to all available actions
