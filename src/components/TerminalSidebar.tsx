@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { ResourceType } from '../resources';
 import { ConfigurationPanel } from './sidebar/ConfigurationPanel';
 import { ResourceList } from './sidebar/ResourceList';
 import { ContextMenu } from './sidebar/ContextMenu';
+import { GlobalSearch } from './sidebar/GlobalSearch';
+import { useResourceCache } from '../contexts/ResourceCacheContext';
 
 // Type definitions
 interface Pod {
@@ -87,14 +89,11 @@ export function TerminalSidebar({
   onNamespaceChange,
   onResourceAction,
 }: TerminalSidebarProps) {
+  // Use global resource cache from context
+  const { filterByType, filterByNamespace, isLoading: cacheLoading } = useResourceCache();
+
   // State
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [pods, setPods] = useState<Pod[]>([]);
-  const [deployments, setDeployments] = useState<Deployment[]>([]);
-  const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
-  const [loadingPods, setLoadingPods] = useState(false);
-  const [loadingDeployments, setLoadingDeployments] = useState(false);
-  const [loadingCronJobs, setLoadingCronJobs] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     pods: false,
     deployments: false,
@@ -108,139 +107,45 @@ export function TerminalSidebar({
     customNamespace?: string;
   } | null>(null);
 
-  // Load pods
-  const loadPods = useCallback(async () => {
-    if (!selectedContext || !selectedNamespace || !window.kube) return;
-    
-    setLoadingPods(true);
-    try {
-      const result = await window.kube.runCommand(
-        selectedContext,
-        `get pods -n ${selectedNamespace} --no-headers -o custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[*].ready,TOTAL:.status.containerStatuses[*].name,STATUS:.status.phase,RESTARTS:.status.containerStatuses[*].restartCount,AGE:.metadata.creationTimestamp`
-      );
-      
-      if (result.code === 0 && result.stdout) {
-        const lines = result.stdout.trim().split('\n').filter(line => line.trim());
-        const podList: Pod[] = lines.map(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length < 6) return null;
-          
-          const [name, readyStr, totalStr, status, restartsStr, ageStr] = parts;
-          const readyArr = readyStr.split(',').filter(r => r === 'true');
-          const totalArr = totalStr.split(',');
-          const ready = `${readyArr.length}/${totalArr.length}`;
-          const restarts = restartsStr.split(',').reduce((sum, r) => sum + (parseInt(r) || 0), 0);
-          const age = calculateAge(ageStr);
-          
-          return { name, ready, status, restarts, age };
-        }).filter((pod): pod is Pod => pod !== null);
-        
-        setPods(podList);
-      }
-    } catch (error) {
-      console.error('Failed to load pods:', error);
-      setPods([]);
-    } finally {
-      setLoadingPods(false);
-    }
-  }, [selectedContext, selectedNamespace]);
+  // Get resources from cache, filtered by namespace
+  const pods = useMemo(() => {
+    const cached = filterByNamespace(selectedNamespace).filter(r => r.type === 'pod');
+    return cached.map(r => ({
+      name: r.name,
+      ready: r.info.includes('|') ? r.info.split('|')[2]?.trim() || 'N/A' : 'N/A',
+      status: r.status,
+      restarts: 0, // Not in cache, could add if needed
+      age: 'N/A', // Not in cache, could add if needed
+    }));
+  }, [filterByNamespace, selectedNamespace]);
 
-  // Load deployments
-  const loadDeployments = useCallback(async () => {
-    if (!selectedContext || !selectedNamespace || !window.kube) return;
-    
-    setLoadingDeployments(true);
-    try {
-      const result = await window.kube.runCommand(
-        selectedContext,
-        `get deployments -n ${selectedNamespace} --no-headers -o custom-columns=NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas,UPTODATE:.status.updatedReplicas,AVAILABLE:.status.availableReplicas,AGE:.metadata.creationTimestamp`
-      );
-      
-      if (result.code === 0 && result.stdout) {
-        const lines = result.stdout.trim().split('\n').filter(line => line.trim());
-        const deploymentList: Deployment[] = lines.map(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length < 6) return null;
-          
-          const [name, readyStr, desiredStr, upToDateStr, availableStr, ageStr] = parts;
-          const ready = parseInt(readyStr) || 0;
-          const desired = parseInt(desiredStr) || 0;
-          const upToDate = parseInt(upToDateStr) || 0;
-          const available = parseInt(availableStr) || 0;
-          const age = calculateAge(ageStr);
-          
-          return { name, ready: `${ready}/${desired}`, upToDate, available, age };
-        }).filter((dep): dep is Deployment => dep !== null);
-        
-        setDeployments(deploymentList);
-      }
-    } catch (error) {
-      console.error('Failed to load deployments:', error);
-      setDeployments([]);
-    } finally {
-      setLoadingDeployments(false);
-    }
-  }, [selectedContext, selectedNamespace]);
+  const deployments = useMemo(() => {
+    const cached = filterByNamespace(selectedNamespace).filter(r => r.type === 'deployment');
+    return cached.map(r => ({
+      name: r.name,
+      ready: r.info.includes('|') ? r.info.split('|')[1]?.trim() || 'N/A' : 'N/A',
+      upToDate: 0, // Not in cache
+      available: 0, // Not in cache
+      age: 'N/A',
+    }));
+  }, [filterByNamespace, selectedNamespace]);
 
-  // Load cronjobs
-  const loadCronJobs = useCallback(async () => {
-    if (!selectedContext || !window.kube) return;
-    
-    setLoadingCronJobs(true);
-    try {
-      const result = await window.kube.runCommand(
-        selectedContext,
-        `get cronjobs -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,SCHEDULE:.spec.schedule,SUSPEND:.spec.suspend,ACTIVE:.status.active,LASTSCHEDULE:.status.lastScheduleTime`
-      );
-      
-      if (result.code === 0 && result.stdout) {
-        const lines = result.stdout.trim().split('\n').filter(line => line.trim());
-        const cronJobList: CronJob[] = lines.map(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length < 6) return null;
-          
-          const [namespace, name, schedule, suspendStr, activeStr, lastScheduleStr] = parts;
-          const suspend = suspendStr === 'true';
-          const active = parseInt(activeStr) || 0;
-          const lastSchedule = lastScheduleStr && lastScheduleStr !== '<none>' 
-            ? calculateAge(lastScheduleStr) + ' ago' 
-            : 'Never';
-          
-          return {
-            name: `${namespace}/${name}`,
-            namespace,
-            schedule,
-            suspend,
-            active,
-            lastSchedule,
-          };
-        }).filter((cj): cj is CronJob => cj !== null);
-        
-        setCronJobs(cronJobList);
-      }
-    } catch (error) {
-      console.error('Failed to load cronjobs:', error);
-      setCronJobs([]);
-    } finally {
-      setLoadingCronJobs(false);
-    }
-  }, [selectedContext]);
+  const cronJobs = useMemo(() => {
+    const cached = filterByType('cronjob');
+    return cached.map(r => ({
+      name: `${r.namespace}/${r.name}`,
+      namespace: r.namespace,
+      schedule: r.info.includes('|') ? r.info.split('|')[1]?.trim() || 'N/A' : 'N/A',
+      suspend: r.status === 'Suspended',
+      active: 0, // Not in cache
+      lastSchedule: 'N/A',
+    }));
+  }, [filterByType]);
 
   // Toggle section
-  const toggleSection = useCallback((section: string) => {
-    setExpandedSections(prev => {
-      const newExpanded = { ...prev, [section]: !prev[section] };
-      
-      // Load data when expanding
-      if (newExpanded[section]) {
-        if (section === 'pods') loadPods();
-        if (section === 'deployments') loadDeployments();
-        if (section === 'cronjobs') loadCronJobs();
-      }
-      
-      return newExpanded;
-    });
-  }, [loadPods, loadDeployments, loadCronJobs]);
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Show context menu
   const showContextMenu = useCallback((x: number, y: number, resourceType: ResourceType, resourceName: string, customNamespace?: string) => {
@@ -254,6 +159,23 @@ export function TerminalSidebar({
 
   return (
     <div style={isCollapsed ? styles.sidebarCollapsed : styles.sidebar}>
+      {/* Custom Scrollbar Styles */}
+      <style>{`
+        .sidebar-content::-webkit-scrollbar {
+          width: 10px;
+        }
+        .sidebar-content::-webkit-scrollbar-track {
+          background: #1e1e1e;
+        }
+        .sidebar-content::-webkit-scrollbar-thumb {
+          background: #424242;
+          border-radius: 5px;
+        }
+        .sidebar-content::-webkit-scrollbar-thumb:hover {
+          background: #4e4e4e;
+        }
+      `}</style>
+
       {/* Collapse/Expand Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
@@ -264,11 +186,19 @@ export function TerminalSidebar({
       </button>
 
       {!isCollapsed && (
-        <div style={styles.sidebarContent}>
+        <div style={styles.sidebarContent} className="sidebar-content">
           {/* Header */}
           <div style={styles.header}>
             <h3 style={styles.title}>Kubernetes</h3>
           </div>
+
+          {/* Global Search */}
+          <GlobalSearch
+            selectedContext={selectedContext}
+            onSelectResult={(actionId, resourceType, resourceName, namespace) => {
+              onResourceAction(actionId, resourceType, resourceName, namespace);
+            }}
+          />
 
           {/* Configuration Panel */}
           <ConfigurationPanel
@@ -290,12 +220,12 @@ export function TerminalSidebar({
             title="Pods"
             icon="📦"
             items={pods}
-            loading={loadingPods}
+            loading={cacheLoading}
             isCollapsed={!expandedSections.pods}
             isInEditMode={isInEditMode}
             resourceType="pod"
             onToggle={() => toggleSection('pods')}
-            onRefresh={loadPods}
+            onRefresh={() => {}}
             onResourceAction={onResourceAction}
             onShowContextMenu={showContextMenu}
             renderItem={(pod) => ({
@@ -317,12 +247,12 @@ export function TerminalSidebar({
             title="Deployments"
             icon="🚀"
             items={deployments}
-            loading={loadingDeployments}
+            loading={cacheLoading}
             isCollapsed={!expandedSections.deployments}
             isInEditMode={isInEditMode}
             resourceType="deployment"
             onToggle={() => toggleSection('deployments')}
-            onRefresh={loadDeployments}
+            onRefresh={() => {}}
             onResourceAction={onResourceAction}
             onShowContextMenu={showContextMenu}
             renderItem={(dep) => ({
@@ -344,12 +274,12 @@ export function TerminalSidebar({
             title="CronJobs"
             icon="⏰"
             items={cronJobs}
-            loading={loadingCronJobs}
+            loading={cacheLoading}
             isCollapsed={!expandedSections.cronjobs}
             isInEditMode={isInEditMode}
             resourceType="cronjob"
             onToggle={() => toggleSection('cronjobs')}
-            onRefresh={loadCronJobs}
+            onRefresh={() => {}}
             onResourceAction={onResourceAction}
             onShowContextMenu={showContextMenu}
             renderItem={(cj) => {
@@ -428,6 +358,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
     overflowX: 'hidden',
     padding: '12px',
+    scrollbarGutter: 'stable', // Reserve space for scrollbar to prevent layout shift
   },
   header: {
     marginBottom: '16px',

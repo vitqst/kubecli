@@ -194,6 +194,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     fontWeight: 500,
     display: 'block',
+    color: '#cccccc',
   },
   itemInfo: {
     marginBottom: '6px',

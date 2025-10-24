@@ -6,6 +6,7 @@ import { HomeScreen } from './components/screens/HomeScreen';
 import { TerminalScreen } from './components/screens/TerminalScreen';
 import { ActionPromptDialog } from './components/ActionPromptDialog';
 import { ResourceType, getResourceDefinition, ResourceActionContext } from './resources';
+import { ResourceCacheProvider } from './contexts/ResourceCacheContext';
 
 // Fix for webpack asset relocator __dirname issue in renderer
 declare global {
@@ -235,27 +236,28 @@ function App() {
   }, []);
 
   return (
-    <div style={styles.container}>
-      <style>{`
-        .home-icon-button:hover {
-          background-color: #3e3e42 !important;
-        }
-        .get-started-button:hover {
-          background-color: #1177bb !important;
-        }
-        .form-select:hover {
-          border-color: #0e639c !important;
-        }
-        .form-select:focus {
-          border-color: #0e639c !important;
-          box-shadow: 0 0 0 2px rgba(14, 99, 156, 0.2);
-        }
-        .home-card {
-          animation: fadeIn 0.4s ease-out;
-        }
-      `}</style>
-      
-      {showTerminal ? (
+    <ResourceCacheProvider selectedContext={selectedContext}>
+      <div style={styles.container}>
+        <style>{`
+          .home-icon-button:hover {
+            background-color: #3e3e42 !important;
+          }
+          .get-started-button:hover {
+            background-color: #1177bb !important;
+          }
+          .form-select:hover {
+            border-color: #0e639c !important;
+          }
+          .form-select:focus {
+            border-color: #0e639c !important;
+            box-shadow: 0 0 0 2px rgba(14, 99, 156, 0.2);
+          }
+          .home-card {
+            animation: fadeIn 0.4s ease-out;
+          }
+        `}</style>
+        
+        {showTerminal ? (
         <TerminalScreen
           kubeconfigPath={kubeconfigPath}
           availableConfigs={availableConfigs}
@@ -286,18 +288,19 @@ function App() {
         />
       )}
 
-      {/* Action Prompt Dialog */}
-      {promptDialog && (
-        <ActionPromptDialog
-          title={promptDialog.title}
-          prompts={promptDialog.prompts}
-          confirmMessage={promptDialog.confirmMessage}
-          context={promptDialog.context}
-          onConfirm={handlePromptConfirm}
-          onCancel={handlePromptCancel}
-        />
-      )}
-    </div>
+        {/* Action Prompt Dialog */}
+        {promptDialog && (
+          <ActionPromptDialog
+            title={promptDialog.title}
+            prompts={promptDialog.prompts}
+            confirmMessage={promptDialog.confirmMessage}
+            context={promptDialog.context}
+            onConfirm={handlePromptConfirm}
+            onCancel={handlePromptCancel}
+          />
+        )}
+      </div>
+    </ResourceCacheProvider>
   );
 }
 
@@ -329,7 +332,9 @@ console.log('[Renderer] Root container found, creating React root...');
 
 root.render(
   <ErrorBoundary>
-    <App />
+    <ResourceCacheProvider selectedContext="">
+      <App />
+    </ResourceCacheProvider>
   </ErrorBoundary>
 );
 
