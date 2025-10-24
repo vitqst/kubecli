@@ -279,213 +279,214 @@ function App() {
 
   return (
     <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>Kubernetes CLI Manager</h1>
-        {kubeconfigPath && (
-          <span style={styles.path}>Config: {kubeconfigPath}</span>
-        )}
-        <button
-          onClick={() => setShowTerminal(!showTerminal)}
-          style={styles.toggleButton}
-        >
-          {showTerminal ? 'Show Command UI' : 'Show Terminal'}
-        </button>
-      </header>
-
+      <style>{`
+        .home-icon-button:hover {
+          background-color: #094771 !important;
+          border-color: #0e639c !important;
+        }
+        .get-started-button:hover:not(:disabled) {
+          background-color: #1177bb !important;
+        }
+        .get-started-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .form-select:hover:not(:disabled) {
+          border-color: #0e639c !important;
+        }
+        .form-select:focus {
+          border-color: #0e639c !important;
+          box-shadow: 0 0 0 2px rgba(14, 99, 156, 0.2);
+        }
+        .home-card {
+          animation: fadeIn 0.4s ease-out;
+        }
+      `}</style>
       {showTerminal ? (
-        <div style={styles.terminalContainer}>
-          <TerminalSidebar
-            kubeconfigPath={kubeconfigPath}
-            availableConfigs={availableConfigs}
-            selectedContext={selectedContext}
-            contexts={contexts}
-            selectedNamespace={selectedNamespace}
-            namespaces={namespaces}
-            loadingNamespaces={loadingNamespaces}
-            onConfigChange={handleConfigChange}
-            onContextChange={handleContextChange}
-            onNamespaceChange={handleNamespaceChange}
-            onViewPod={handleViewPod}
-            onEditPod={handleEditPod}
-          />
-          <div style={styles.terminalMain}>
-            <Terminal 
-              id="main"
-              env={{ 
-                KUBECONFIG: kubeconfigPath,
-                KUBECTL_NAMESPACE: selectedNamespace 
-              }}
-              isLoading={isConfigChanging}
-            />
-          </div>
-        </div>
-      ) : (
-        <div style={styles.oldUIContainer}>
-
-      <section style={styles.section}>
-        <h2 style={styles.subtitle}>Kubeconfig & Context</h2>
-        {loadState === 'loading' && <p>Loading contexts…</p>}
-        {loadError && (
-          <p style={styles.error}>
-            {loadError} — check your kubeconfig or kubectl installation.
-          </p>
-        )}
-        
-        {availableConfigs.length > 1 && (
-          <div style={styles.contextRow}>
-            <label htmlFor="config-select" style={styles.label}>
-              Kubeconfig file
-            </label>
-            <select
-              id="config-select"
-              style={styles.select}
-              disabled={configSelectDisabled}
-              value={kubeconfigPath}
-              onChange={(event) => handleConfigChange(event.target.value)}
+        <>
+          {/* Terminal Top Bar */}
+          <header style={styles.terminalHeader}>
+            <button
+              onClick={() => setShowTerminal(false)}
+              style={styles.homeIconButton}
+              className="home-icon-button"
+              title="Go back to home"
             >
-              {availableConfigs.map((config) => (
-                <option key={config.path} value={config.path}>
-                  {config.name} {config.isDefault ? '(default)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div style={styles.contextRow}>
-          <label htmlFor="context-select" style={styles.label}>
-            Active context
-          </label>
-          <select
-            id="context-select"
-            style={styles.select}
-            disabled={disabled}
-            value={selectedContext}
-            onChange={(event) => handleContextChange(event.target.value)}
-          >
-            {contexts.map((ctx) => (
-              <option key={ctx.name} value={ctx.name}>
-                {ctx.name}
-                {ctx.name === currentContext ? ' (current)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-        {contexts.length === 0 && loadState !== 'loading' && (
-          <p style={styles.placeholder}>
-            No contexts found. Check that your kubeconfig is available.
-          </p>
-        )}
-        {activeContextDetails && (
-          <ul style={styles.contextDetails}>
-            <li>
-              <strong>Cluster:</strong> {activeContextDetails.cluster ?? 'N/A'}
-            </li>
-            <li>
-              <strong>Server:</strong> {activeContextDetails.server ?? 'N/A'}
-            </li>
-            <li>
-              <strong>User:</strong> {activeContextDetails.user ?? 'N/A'}
-            </li>
-            {activeContextDetails.namespace && (
-              <li>
-                <strong>Namespace:</strong> {activeContextDetails.namespace}
-              </li>
-            )}
-          </ul>
-        )}
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.subtitle}>Namespace</h2>
-        {loadingNamespaces && <p>Loading namespaces…</p>}
-        <div style={styles.contextRow}>
-          <label htmlFor="namespace-select" style={styles.label}>
-            Select Namespace
-          </label>
-          <select
-            id="namespace-select"
-            style={styles.select}
-            value={selectedNamespace}
-            onChange={(e) => handleNamespaceChange(e.target.value)}
-            disabled={loadingNamespaces || namespaces.length === 0}
-          >
-            {namespaces.map((ns) => (
-              <option key={ns} value={ns}>
-                {ns}
-              </option>
-            ))}
-          </select>
-        </div>
-        {namespaces.length === 0 && !loadingNamespaces && (
-          <p style={styles.placeholder}>
-            No namespaces found. Make sure you have access to the cluster.
-          </p>
-        )}
-        <p style={styles.hint}>
-          Commands will automatically use <code>-n {selectedNamespace}</code>
-        </p>
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.subtitle}>kubectl Command Runner</h2>
-        <div style={styles.commandRow}>
-          <input
-            type="text"
-            placeholder="e.g. get pods -A"
-            value={command}
-            onChange={(event) => setCommand(event.target.value)}
-            style={styles.commandInput}
-            disabled={disabled}
-          />
-          <button
-            type="button"
-            style={{
-              ...styles.runButton,
-              opacity: disabled || isRunning ? 0.6 : 1,
-              cursor: disabled || isRunning ? 'not-allowed' : 'pointer',
-            }}
-            onClick={() => void handleRun()}
-            disabled={disabled || isRunning}
-          >
-            {isRunning ? 'Running…' : 'Run'}
-          </button>
-        </div>
-        {runError && <p style={styles.error}>{runError}</p>}
-      </section>
-
-      <section style={styles.section}>
-        <h2 style={styles.subtitle}>Output</h2>
-        {result ? (
-          <div style={styles.resultContainer}>
-            <div style={styles.resultMeta}>
-              <span>Exit code: {result.code ?? 'n/a'}</span>
-              <span>
-                Completed:{' '}
-                {result.completedAt.toLocaleTimeString(undefined, {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                })}
-              </span>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+            </button>
+            <div style={styles.configPathDisplay}>
+              <span style={styles.configLabel}>Config:</span>
+              <span style={styles.configPath}>{kubeconfigPath}</span>
             </div>
-            <div style={styles.outputGroup}>
-              <h3 style={styles.outputTitle}>STDOUT</h3>
-              <pre style={styles.outputBlock}>
-                {result.stdout.trim() ? result.stdout : '<no output>'}
-              </pre>
-            </div>
-            <div style={styles.outputGroup}>
-              <h3 style={styles.outputTitle}>STDERR</h3>
-              <pre style={styles.outputBlock}>
-                {result.stderr.trim() ? result.stderr : '<no output>'}
-              </pre>
+          </header>
+          
+          {/* Terminal Content */}
+          <div style={styles.terminalContainer}>
+            <TerminalSidebar
+              kubeconfigPath={kubeconfigPath}
+              availableConfigs={availableConfigs}
+              selectedContext={selectedContext}
+              contexts={contexts}
+              selectedNamespace={selectedNamespace}
+              namespaces={namespaces}
+              loadingNamespaces={loadingNamespaces}
+              onConfigChange={handleConfigChange}
+              onContextChange={handleContextChange}
+              onNamespaceChange={handleNamespaceChange}
+              onViewPod={handleViewPod}
+              onEditPod={handleEditPod}
+            />
+            <div style={styles.terminalMain}>
+              <Terminal 
+                id="main"
+                env={{ 
+                  KUBECONFIG: kubeconfigPath,
+                  KUBECTL_NAMESPACE: selectedNamespace 
+                }}
+                isLoading={isConfigChanging}
+              />
             </div>
           </div>
-        ) : (
-          <p style={styles.placeholder}>Command output will appear here.</p>
-        )}
-      </section>
+        </>
+      ) : (
+        <div style={styles.homeContainer}>
+          {/* Home Screen Header */}
+          <div style={styles.homeHeader}>
+            <div style={styles.logoContainer}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#4ec9b0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <h1 style={styles.homeTitle}>Kubernetes CLI Manager</h1>
+            </div>
+            <p style={styles.homeSubtitle}>Manage your Kubernetes clusters with ease</p>
+          </div>
+
+          {/* Home Screen Content */}
+          <div style={styles.homeContent}>
+            <div style={styles.homeCard} className="home-card">
+              <h2 style={styles.cardTitle}>Configuration</h2>
+              
+              {loadState === 'loading' && (
+                <div style={styles.loadingMessage}>
+                  <div style={styles.spinner}></div>
+                  <span>Loading contexts…</span>
+                </div>
+              )}
+              
+              {loadError && (
+                <div style={styles.errorMessage}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                  <span>{loadError}</span>
+                </div>
+              )}
+
+              {!loadState || loadState === 'idle' ? (
+                <>
+                  {/* Kubeconfig File Selector */}
+                  {availableConfigs.length > 1 && (
+                    <div style={styles.formGroup}>
+                      <label htmlFor="config-select" style={styles.formLabel}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                          <polyline points="13 2 13 9 20 9"></polyline>
+                        </svg>
+                        Kubeconfig File
+                      </label>
+                      <select
+                        id="config-select"
+                        style={styles.formSelect}
+                        className="form-select"
+                        disabled={configSelectDisabled}
+                        value={kubeconfigPath}
+                        onChange={(event) => handleConfigChange(event.target.value)}
+                      >
+                        {availableConfigs.map((config) => (
+                          <option key={config.path} value={config.path}>
+                            {config.name} {config.isDefault ? '(default)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <div style={styles.formHint}>{kubeconfigPath}</div>
+                    </div>
+                  )}
+
+                  {/* Context Selector */}
+                  <div style={styles.formGroup}>
+                    <label htmlFor="context-select" style={styles.formLabel}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                      </svg>
+                      Kubernetes Context
+                    </label>
+                    {contexts.length > 0 ? (
+                      <>
+                        <select
+                          id="context-select"
+                          style={styles.formSelect}
+                          className="form-select"
+                          disabled={disabled}
+                          value={selectedContext}
+                          onChange={(event) => handleContextChange(event.target.value)}
+                        >
+                          {contexts.map((ctx) => (
+                            <option key={ctx.name} value={ctx.name}>
+                              {ctx.name}
+                              {ctx.name === currentContext ? ' (current)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {activeContextDetails && (
+                          <div style={styles.contextInfo}>
+                            <div style={styles.contextInfoRow}>
+                              <span style={styles.contextInfoLabel}>Cluster:</span>
+                              <span style={styles.contextInfoValue}>{activeContextDetails.cluster ?? 'N/A'}</span>
+                            </div>
+                            <div style={styles.contextInfoRow}>
+                              <span style={styles.contextInfoLabel}>Server:</span>
+                              <span style={styles.contextInfoValue}>{activeContextDetails.server ?? 'N/A'}</span>
+                            </div>
+                            <div style={styles.contextInfoRow}>
+                              <span style={styles.contextInfoLabel}>User:</span>
+                              <span style={styles.contextInfoValue}>{activeContextDetails.user ?? 'N/A'}</span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={styles.noDataMessage}>
+                        No contexts found. Check that your kubeconfig is available.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Get Started Button */}
+                  {contexts.length > 0 && selectedContext && (
+                    <button
+                      onClick={() => setShowTerminal(true)}
+                      style={styles.getStartedButton}
+                      className="get-started-button"
+                      disabled={disabled}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      </svg>
+                      Get Started
+                    </button>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -494,32 +495,213 @@ function App() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     width: '100%',
     height: '100vh',
     margin: 0,
     padding: 0,
-    color: '#1f2933',
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
+    backgroundColor: '#1e1e1e',
   },
-  header: {
+  // Home Screen Styles
+  homeContainer: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: '#1e1e1e',
+    overflow: 'auto',
+  },
+  homeHeader: {
+    padding: '60px 40px 40px',
+    textAlign: 'center',
+    borderBottom: '1px solid #3e3e42',
+  },
+  logoContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '16px',
+    marginBottom: '16px',
+  },
+  homeTitle: {
+    fontSize: '2.5rem',
+    fontWeight: 600,
+    margin: 0,
+    color: '#cccccc',
+  },
+  homeSubtitle: {
+    fontSize: '1.125rem',
+    color: '#858585',
+    margin: '8px 0 0',
+  },
+  homeContent: {
+    flex: 1,
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    padding: '60px 40px',
+  },
+  homeCard: {
+    width: '100%',
+    maxWidth: '600px',
+    backgroundColor: '#252526',
+    border: '1px solid #3e3e42',
+    borderRadius: '8px',
+    padding: '32px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+  },
+  cardTitle: {
+    fontSize: '1.5rem',
+    fontWeight: 600,
+    color: '#cccccc',
+    marginTop: 0,
+    marginBottom: '24px',
+  },
+  formGroup: {
+    marginBottom: '24px',
+  },
+  formLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    fontSize: '0.875rem',
+    fontWeight: 500,
+    color: '#cccccc',
+    marginBottom: '8px',
+  },
+  formSelect: {
+    width: '100%',
+    padding: '12px 16px',
+    fontSize: '1rem',
+    backgroundColor: '#3c3c3c',
+    border: '1px solid #3e3e42',
+    borderRadius: '6px',
+    color: '#cccccc',
+    cursor: 'pointer',
+    outline: 'none',
+    transition: 'border-color 0.2s',
+  },
+  formHint: {
+    fontSize: '0.75rem',
+    color: '#858585',
+    marginTop: '6px',
+    fontStyle: 'italic',
+  },
+  contextInfo: {
+    marginTop: '12px',
+    padding: '12px',
+    backgroundColor: '#1e1e1e',
+    border: '1px solid #3e3e42',
+    borderRadius: '6px',
+  },
+  contextInfoRow: {
     display: 'flex',
     justifyContent: 'space-between',
+    padding: '4px 0',
+    fontSize: '0.875rem',
+  },
+  contextInfoLabel: {
+    color: '#858585',
+    fontWeight: 500,
+  },
+  contextInfoValue: {
+    color: '#4ec9b0',
+    fontFamily: 'monospace',
+  },
+  getStartedButton: {
+    width: '100%',
+    padding: '14px 24px',
+    fontSize: '1.125rem',
+    fontWeight: 600,
+    backgroundColor: '#0e639c',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    display: 'flex',
     alignItems: 'center',
-    padding: '16px 24px',
-    backgroundColor: '#f5f5f5',
-    borderBottom: '1px solid #e0e0e0',
+    justifyContent: 'center',
+    gap: '8px',
+    transition: 'background-color 0.2s',
+    marginTop: '8px',
+  },
+  loadingMessage: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '16px',
+    color: '#cccccc',
+    fontSize: '0.875rem',
+  },
+  spinner: {
+    width: '20px',
+    height: '20px',
+    border: '2px solid #3e3e42',
+    borderTop: '2px solid #0e639c',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+  },
+  errorMessage: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '16px',
+    backgroundColor: '#5a1d1d',
+    border: '1px solid #be1100',
+    borderRadius: '6px',
+    color: '#f48771',
+    fontSize: '0.875rem',
+  },
+  noDataMessage: {
+    padding: '16px',
+    color: '#858585',
+    fontSize: '0.875rem',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    backgroundColor: '#1e1e1e',
+    border: '1px solid #3e3e42',
+    borderRadius: '6px',
+  },
+  // Terminal Screen Styles
+  terminalHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '12px 16px',
+    backgroundColor: '#252526',
+    borderBottom: '1px solid #3e3e42',
     flexShrink: 0,
   },
-  title: {
-    fontSize: '1.75rem',
-    margin: 0,
+  homeIconButton: {
+    width: '40px',
+    height: '40px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    border: '1px solid #3e3e42',
+    borderRadius: '6px',
+    color: '#cccccc',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
   },
-  path: {
+  configPathDisplay: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flex: 1,
+  },
+  configLabel: {
     fontSize: '0.875rem',
-    color: '#52606d',
+    fontWeight: 500,
+    color: '#858585',
+  },
+  configPath: {
+    fontSize: '0.875rem',
+    color: '#4ec9b0',
+    fontFamily: 'monospace',
   },
   section: {
     marginBottom: '24px',
@@ -609,15 +791,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#c81e1e',
     marginTop: '8px',
   },
-  toggleButton: {
-    padding: '8px 16px',
-    backgroundColor: '#2472c8',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
   terminalContainer: {
     flex: 1,
     width: '100%',
@@ -630,12 +803,6 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     height: '100%',
     overflow: 'hidden',
-  },
-  oldUIContainer: {
-    flex: 1,
-    width: '100%',
-    overflowY: 'auto',
-    padding: '24px',
   },
 };
 

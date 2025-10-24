@@ -4,6 +4,16 @@ A desktop application for managing Kubernetes contexts and running kubectl comma
 
 📚 **[Full Documentation](docs/README.md)** | 🔧 **[Troubleshooting](docs/troubleshooting/)** | 🧪 **[Use Cases](docs/ai/)**
 
+## Screenshots
+
+- **Home Screen**
+
+  ![Home Screen](docs/screenshoots/home.png)
+
+- **Terminal View**
+
+  ![Terminal View](docs/screenshoots/terminal.png)
+
 ## Features
 
 - **Kubeconfig File Switching**: Switch between multiple kubeconfig files (not just contexts)
