@@ -23,6 +23,8 @@ A desktop application for managing Kubernetes contexts and running kubectl comma
 
 ```bash
 npm install
+# or
+make install
 ```
 
 ## Development
@@ -30,10 +32,24 @@ npm install
 Start the application in development mode:
 
 ```bash
+make dev
+# or
 npm start
 ```
 
 The app will launch with DevTools open for debugging.
+
+### Available Make Commands
+
+```bash
+make help       # Show all available commands
+make dev        # Start development server (same as npm start)
+make build      # Build for production
+make package    # Package the application for distribution
+make clean      # Clean build artifacts
+make typecheck  # Check TypeScript compilation
+make lint       # Run linter
+```
 
 ## Usage
 

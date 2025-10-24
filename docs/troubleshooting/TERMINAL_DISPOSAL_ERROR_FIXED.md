@@ -75,6 +75,10 @@ useEffect(() => {
     window.terminal.write(id, aliasCommand).catch((err) => {
       console.error('Failed to update kubectl alias:', err);
     });
+    const clearCommand = `clear\n`;
+    window.terminal.write(id, clearCommand).catch((err) => {
+      console.error('Failed to clear terminal:', err);
+    });
     
     xtermRef.current.writeln(`\x1b[32m✓ kubectl configured for namespace: ${namespace}\x1b[0m`);
   }

@@ -48,7 +48,6 @@ This guide helps new contributors―human or AI―spin up quickly and begin writ
 
 ## 7. Wrap Up
 
-- Review your diff for unintended changes or secrets.
 - Update documentation when behavior changes (README, `docs/`, inline docs).
 
 Following these steps keeps contributions predictable, testable, and easy for teammates to review.

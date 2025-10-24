@@ -39,6 +39,7 @@ function App() {
   const [namespaces, setNamespaces] = useState<string[]>([]);
   const [selectedNamespace, setSelectedNamespace] = useState<string>('default');
   const [loadingNamespaces, setLoadingNamespaces] = useState<boolean>(false);
+  const [isConfigChanging, setIsConfigChanging] = useState<boolean>(false);
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
@@ -129,11 +130,18 @@ function App() {
 
   // Handle namespace change and save to localStorage
   const handleNamespaceChange = useCallback((namespace: string) => {
-    setSelectedNamespace(namespace);
-    if (selectedContext) {
-      const storageKey = `kubecli-namespace-${selectedContext}`;
-      localStorage.setItem(storageKey, namespace);
-    }
+    setIsConfigChanging(true);
+    // Small delay to ensure overlay appears before state update
+    setTimeout(() => {
+      setSelectedNamespace(namespace);
+      if (selectedContext) {
+        const storageKey = `kubecli-namespace-${selectedContext}`;
+        localStorage.setItem(storageKey, namespace);
+      }
+      // Keep loading state to let terminal update and prevent flicker
+      // Longer duration ensures overlay stays until terminal is fully settled
+      setTimeout(() => setIsConfigChanging(false), 1400);
+    }, 50);
   }, [selectedContext]);
 
   // Handle view pod - show YAML in terminal
@@ -158,18 +166,25 @@ function App() {
 
   const handleContextChange = useCallback(
     async (nextContext: string) => {
-      setSelectedContext(nextContext);
       setRunError(null);
+      setIsConfigChanging(true);
+      // Small delay to ensure overlay appears before state update
+      await new Promise(resolve => setTimeout(resolve, 50));
       try {
         if (!kubeAPI) {
           throw new Error('Renderer bridge unavailable.');
         }
+        setSelectedContext(nextContext);
         const summary = await kubeAPI.setContext(nextContext);
         applySummary(summary);
+        // Keep loading state to let terminal update and prevent flicker
+        // Longer duration ensures overlay stays until terminal is fully settled
+        setTimeout(() => setIsConfigChanging(false), 1900);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unable to switch context';
         setRunError(message);
+        setIsConfigChanging(false);
         await refreshContexts();
       }
     },
@@ -181,6 +196,9 @@ function App() {
       setLoadState('loading');
       setLoadError(null);
       setRunError(null);
+      setIsConfigChanging(true);
+      // Small delay to ensure overlay appears before state update
+      await new Promise(resolve => setTimeout(resolve, 50));
       // Clear selected context and namespaces to prevent race conditions
       setSelectedContext('');
       setNamespaces([]);
@@ -192,11 +210,15 @@ function App() {
         const summary = await kubeAPI.setConfig(configPath);
         applySummary(summary);
         setLoadState('idle');
+        // Keep loading state to let terminal update and prevent flicker
+        // Longer duration ensures overlay stays until terminal is fully settled
+        setTimeout(() => setIsConfigChanging(false), 2200);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unable to switch kubeconfig';
         setLoadError(message);
         setLoadState('error');
+        setIsConfigChanging(false);
       }
     },
     [applySummary]
@@ -293,6 +315,7 @@ function App() {
                 KUBECONFIG: kubeconfigPath,
                 KUBECTL_NAMESPACE: selectedNamespace 
               }}
+              isLoading={isConfigChanging}
             />
           </div>
         </div>

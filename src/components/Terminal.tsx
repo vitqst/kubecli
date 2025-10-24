@@ -9,9 +9,10 @@ interface TerminalProps {
   env?: Record<string, string>;
   onReady?: () => void;
   onExit?: (exitCode: number, signal?: number) => void;
+  isLoading?: boolean;
 }
 
-export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
+export function Terminal({ id, cwd, env, onReady, onExit, isLoading = false }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -24,41 +25,53 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
     
     console.log(`[Terminal ${id}] Environment changed:`, env);
     
-    // Clear terminal for fresh start
-    if (window.terminal) {
-      window.terminal.write(id, 'clear\n').catch((err) => {
-        console.error('Failed to clear terminal:', err);
-      });
-    }
-    
-    // Give clear command time to execute before showing messages
+    // Wait for loading overlay to appear and be fully visible
+    // This prevents any flickering by doing all updates while overlay is shown
     setTimeout(() => {
       if (!xtermRef.current || !isMountedRef.current) return;
       
+      // Batch all terminal writes together to minimize redraws
+      const commands: string[] = [];
+      const messages: string[] = [];
+      
       // Update KUBECONFIG when config changes
-      if (env.KUBECONFIG && window.terminal) {
-        const configCommand = `export KUBECONFIG=${env.KUBECONFIG}\n`;
-        window.terminal.write(id, configCommand).catch((err) => {
-          console.error('Failed to update KUBECONFIG:', err);
-        });
-        
-        xtermRef.current.writeln(`\x1b[36m✓ KUBECONFIG: ${env.KUBECONFIG}\x1b[0m`);
+      if (env.KUBECONFIG) {
+        commands.push(`export KUBECONFIG=${env.KUBECONFIG}`);
+        messages.push(`\x1b[36m✓ KUBECONFIG: ${env.KUBECONFIG}\x1b[0m`);
       }
       
       // Update kubectl alias when namespace changes
-      if (env.KUBECTL_NAMESPACE && window.terminal) {
+      if (env.KUBECTL_NAMESPACE) {
         const namespace = env.KUBECTL_NAMESPACE;
-        const aliasCommand = `export KUBECTL_NAMESPACE=${namespace}\nalias kubectl='kubectl -n ${namespace}'\n`;
-        window.terminal.write(id, aliasCommand).catch((err) => {
-          console.error('Failed to update kubectl alias:', err);
-        });
+        commands.push(`export KUBECTL_NAMESPACE=${namespace}`);
+        commands.push(`alias kubectl='kubectl -n ${namespace}'`);
         
-        xtermRef.current.writeln(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
-        xtermRef.current.writeln(`\x1b[90m  All kubectl commands will use -n ${namespace}\x1b[0m`);
+        messages.push(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
+        messages.push(`\x1b[90m  All kubectl commands will use -n ${namespace}\x1b[0m`);
       }
       
-      xtermRef.current.writeln('');
-    }, 100);
+      // Clear and write everything in one operation to prevent double blink
+      xtermRef.current.clear();
+      
+      // Write all messages at once
+      messages.forEach(msg => {
+        if (xtermRef.current) {
+          xtermRef.current.writeln(msg);
+        }
+      });
+      
+      if (xtermRef.current) {
+        xtermRef.current.writeln('');
+      }
+      
+      // Send all commands at once to the shell (after visual update)
+      if (commands.length > 0 && window.terminal) {
+        const batchCommand = commands.join('\n') + '\n';
+        window.terminal.write(id, batchCommand).catch((err) => {
+          console.error('Failed to update environment:', err);
+        });
+      }
+    }, 500); // Wait 500ms for overlay to be fully visible before any terminal updates
   }, [env, id, isReady]);
 
   useEffect(() => {
@@ -436,13 +449,66 @@ export function Terminal({ id, cwd, env, onReady, onExit }: TerminalProps) {
   }, [isReady, id]);
 
   return (
-    <div
-      ref={terminalRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        backgroundColor: '#1e1e1e',
-      }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div
+        ref={terminalRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#1e1e1e',
+        }}
+      />
+      {isLoading && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(30, 30, 30, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            animation: 'fadeIn 0.2s ease-in',
+          }}
+        >
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              border: '4px solid #3e3e42',
+              borderTop: '4px solid #0e639c',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <div
+            style={{
+              marginTop: '16px',
+              color: '#cccccc',
+              fontSize: '14px',
+              fontWeight: 500,
+            }}
+          >
+            Updating terminal environment...
+          </div>
+          <style>
+            {`
+              @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+              @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+            `}
+          </style>
+        </div>
+      )}
+    </div>
   );
 }
