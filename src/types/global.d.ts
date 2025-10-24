@@ -15,6 +15,7 @@ declare global {
       close: (id: string) => Promise<void>;
       onData: (callback: (id: string, data: string) => void) => (() => void);
       onExit: (callback: (id: string, exitCode: number, signal?: number) => void) => (() => void);
+      onEditMode: (callback: (id: string, isEditMode: boolean) => void) => (() => void);
     };
   }
 }

@@ -3,14 +3,14 @@
  * Independent file containing all service-specific actions
  */
 
-import { ResourceDefinition, ResourceAction } from './types';
+import { ResourceDefinition, ResourceAction, kubectl } from './types';
 
 const viewAction: ResourceAction = {
   id: 'view',
   label: 'View',
   icon: '👁️',
   description: 'View service YAML',
-  getCommand: (ctx) => `kubectl get service ${ctx.resourceName} -n ${ctx.namespace} -o yaml\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `get service ${ctx.resourceName} -o yaml\n`),
 };
 
 const describeAction: ResourceAction = {
@@ -18,7 +18,7 @@ const describeAction: ResourceAction = {
   label: 'Describe',
   icon: '📋',
   description: 'Describe service details',
-  getCommand: (ctx) => `kubectl describe service ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `describe service ${ctx.resourceName}\n`),
 };
 
 const editAction: ResourceAction = {
@@ -26,7 +26,7 @@ const editAction: ResourceAction = {
   label: 'Edit',
   icon: '✏️',
   description: 'Edit service configuration',
-  getCommand: (ctx) => `kubectl edit service ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `edit service ${ctx.resourceName}\n`),
 };
 
 const endpointsAction: ResourceAction = {
@@ -34,7 +34,7 @@ const endpointsAction: ResourceAction = {
   label: 'Endpoints',
   icon: '🔗',
   description: 'Show service endpoints',
-  getCommand: (ctx) => `kubectl get endpoints ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `get endpoints ${ctx.resourceName}\n`),
 };
 
 const portForwardAction: ResourceAction = {
@@ -42,7 +42,7 @@ const portForwardAction: ResourceAction = {
   label: 'Port Forward',
   icon: '🔌',
   description: 'Forward service port',
-  getCommand: (ctx) => `kubectl port-forward svc/${ctx.resourceName} -n ${ctx.namespace} 8080:80\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `port-forward svc/${ctx.resourceName} 8080:80\n`),
 };
 
 const eventsAction: ResourceAction = {
@@ -51,7 +51,7 @@ const eventsAction: ResourceAction = {
   icon: '📅',
   description: 'Show service events',
   getCommand: (ctx) => 
-    `kubectl get events -n ${ctx.namespace} --field-selector involvedObject.name=${ctx.resourceName}\n`,
+    kubectl(ctx.namespace, `get events --field-selector involvedObject.name=${ctx.resourceName}\n`),
 };
 
 const deleteAction: ResourceAction = {
@@ -59,7 +59,8 @@ const deleteAction: ResourceAction = {
   label: 'Delete',
   icon: '🗑️',
   description: 'Delete service',
-  getCommand: (ctx) => `kubectl delete service ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  confirmMessage: (ctx) => `Are you sure you want to delete service "${ctx.resourceName}"? This action cannot be undone.`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `delete service ${ctx.resourceName}\n`),
 };
 
 /**

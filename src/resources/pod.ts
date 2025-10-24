@@ -3,7 +3,7 @@
  * Independent file containing all pod-specific actions
  */
 
-import { ResourceDefinition, ResourceAction, ResourceActionContext } from './types';
+import { ResourceDefinition, ResourceAction, ResourceActionContext, kubectl } from './types';
 
 // Pod-specific actions
 const viewAction: ResourceAction = {
@@ -12,7 +12,7 @@ const viewAction: ResourceAction = {
   icon: '👁️',
   description: 'View pod YAML',
   isFavorite: true,
-  getCommand: (ctx) => `kubectl get pod ${ctx.resourceName} -n ${ctx.namespace} -o yaml\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `get pod ${ctx.resourceName} -o yaml\n`),
 };
 
 const describeAction: ResourceAction = {
@@ -20,7 +20,7 @@ const describeAction: ResourceAction = {
   label: 'Describe',
   icon: '📋',
   description: 'Describe pod details',
-  getCommand: (ctx) => `kubectl describe pod ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `describe pod ${ctx.resourceName}\n`),
 };
 
 const editAction: ResourceAction = {
@@ -28,7 +28,7 @@ const editAction: ResourceAction = {
   label: 'Edit',
   icon: '✏️',
   description: 'Edit pod configuration',
-  getCommand: (ctx) => `kubectl edit pod ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `edit pod ${ctx.resourceName}\n`),
 };
 
 const execAction: ResourceAction = {
@@ -38,7 +38,7 @@ const execAction: ResourceAction = {
   description: 'Execute shell in pod',
   isFavorite: true,
   getCommand: (ctx) => 
-    `kubectl exec -it ${ctx.resourceName} -n ${ctx.namespace} -- sh || kubectl exec -it ${ctx.resourceName} -n ${ctx.namespace} -- bash\n`,
+    kubectl(ctx.namespace, `exec -it ${ctx.resourceName} -- sh || kubectl exec -it ${ctx.resourceName} -n ${ctx.namespace} -- bash\n`),
 };
 
 const logsAction: ResourceAction = {
@@ -47,7 +47,7 @@ const logsAction: ResourceAction = {
   icon: '📜',
   description: 'Show pod logs (follow)',
   isFavorite: true,
-  getCommand: (ctx) => `kubectl logs ${ctx.resourceName} -n ${ctx.namespace} --tail=200 -f\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `logs ${ctx.resourceName} --tail=200 -f\n`),
 };
 
 const portForwardAction: ResourceAction = {
@@ -80,7 +80,7 @@ const portForwardAction: ResourceAction = {
   getCommand: (ctx, values) => {
     const local = values?.localPort || 8080;
     const remote = values?.remotePort || 8080;
-    return `kubectl port-forward ${ctx.resourceName} -n ${ctx.namespace} ${local}:${remote}\n`;
+    return kubectl(ctx.namespace, `port-forward ${ctx.resourceName} ${local}:${remote}\n`);
   },
 };
 
@@ -90,7 +90,7 @@ const eventsAction: ResourceAction = {
   icon: '📅',
   description: 'Show pod events',
   getCommand: (ctx) => 
-    `kubectl get events -n ${ctx.namespace} --field-selector involvedObject.name=${ctx.resourceName}\n`,
+    kubectl(ctx.namespace, `get events --field-selector involvedObject.name=${ctx.resourceName}\n`),
 };
 
 const topAction: ResourceAction = {
@@ -98,7 +98,7 @@ const topAction: ResourceAction = {
   label: 'Top',
   icon: '📈',
   description: 'Show resource usage',
-  getCommand: (ctx) => `kubectl top pod ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `top pod ${ctx.resourceName}\n`),
 };
 
 const deleteAction: ResourceAction = {
@@ -107,7 +107,7 @@ const deleteAction: ResourceAction = {
   icon: '🗑️',
   description: 'Delete pod',
   confirmMessage: (ctx) => `Are you sure you want to delete pod "${ctx.resourceName}"? This action cannot be undone.`,
-  getCommand: (ctx) => `kubectl delete pod ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `delete pod ${ctx.resourceName}\n`),
 };
 
 /**

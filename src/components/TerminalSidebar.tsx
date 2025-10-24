@@ -26,6 +26,7 @@ interface CronJob {
   schedule: string;
   suspend: boolean;
   active: number;
+  namespace: string;
   lastSchedule: string;
 }
 
@@ -49,6 +50,7 @@ interface TerminalSidebarProps {
   selectedNamespace: string;
   namespaces: string[];
   loadingNamespaces: boolean;
+  isInEditMode: boolean;
   onConfigChange: (path: string) => void;
   onContextChange: (context: string) => void;
   onNamespaceChange: (namespace: string) => void;
@@ -63,6 +65,7 @@ export function TerminalSidebar({
   selectedNamespace,
   namespaces,
   loadingNamespaces,
+  isInEditMode,
   onConfigChange,
   onContextChange,
   onNamespaceChange,
@@ -194,6 +197,7 @@ export function TerminalSidebar({
     
     setLoadingCronJobs(true);
     try {
+      // hardcode namespace for now because cronjobs al
       const result = await window.kube.runCommand(
         selectedContext,
         `get cronjobs -A -o json`
@@ -207,6 +211,7 @@ export function TerminalSidebar({
           
           return {
             name: `${item.metadata.namespace}/${item.metadata.name}`,
+            namespace: item.metadata.namespace,
             schedule: item.spec.schedule,
             suspend: item.spec.suspend || false,
             active: item.status.active?.length || 0,
@@ -321,7 +326,9 @@ export function TerminalSidebar({
               <select
                 value={kubeconfigPath}
                 onChange={(e) => onConfigChange(e.target.value)}
-                style={styles.select}
+                style={isInEditMode ? {...styles.select, ...styles.disabledSelect} : styles.select}
+                disabled={isInEditMode}
+                title={isInEditMode ? 'Cannot change config while in edit mode' : ''}
               >
                 {availableConfigs.map((config) => (
                   <option key={config.path} value={config.path}>
@@ -343,7 +350,9 @@ export function TerminalSidebar({
                 <select
                   value={selectedContext}
                   onChange={(e) => onContextChange(e.target.value)}
-                  style={styles.select}
+                  style={isInEditMode ? {...styles.select, ...styles.disabledSelect} : styles.select}
+                  disabled={isInEditMode}
+                  title={isInEditMode ? 'Cannot change context while in edit mode' : ''}
                 >
                   {contexts.map((ctx) => (
                     <option key={ctx.name} value={ctx.name}>
@@ -370,7 +379,9 @@ export function TerminalSidebar({
                 <select
                   value={selectedNamespace}
                   onChange={(e) => onNamespaceChange(e.target.value)}
-                  style={styles.select}
+                  style={isInEditMode ? {...styles.select, ...styles.disabledSelect} : styles.select}
+                  disabled={isInEditMode}
+                  title={isInEditMode ? 'Cannot change namespace while in edit mode' : ''}
                 >
                   {namespaces.map((ns) => (
                     <option key={ns} value={ns}>
@@ -451,8 +462,9 @@ export function TerminalSidebar({
                             <button
                               key={action.id}
                               onClick={() => onResourceAction(action.id, 'pod', pod.name)}
-                              style={styles.actionButton}
-                              title={action.description}
+                              style={isInEditMode ? {...styles.actionButton, ...styles.disabledButton} : styles.actionButton}
+                              title={isInEditMode ? 'Cannot perform actions while in edit mode' : action.description}
+                              disabled={isInEditMode}
                             >
                               {action.icon} {action.label}
                             </button>
@@ -470,8 +482,9 @@ export function TerminalSidebar({
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 showContextMenu(e.clientX, e.clientY, 'pod', pod.name);
                               }}
-                              style={styles.moreButton}
-                              title="More actions"
+                              style={isInEditMode ? {...styles.moreButton, ...styles.disabledButton} : styles.moreButton}
+                              title={isInEditMode ? 'Cannot perform actions while in edit mode' : 'More actions'}
+                              disabled={isInEditMode}
                             >
                               ⋯
                             </button>
@@ -544,8 +557,9 @@ export function TerminalSidebar({
                             <button
                               key={action.id}
                               onClick={() => onResourceAction(action.id, 'deployment', dep.name)}
-                              style={styles.actionButton}
-                              title={action.description}
+                              style={isInEditMode ? {...styles.actionButton, ...styles.disabledButton} : styles.actionButton}
+                              title={isInEditMode ? 'Cannot perform actions while in edit mode' : action.description}
+                              disabled={isInEditMode}
                             >
                               {action.icon} {action.label}
                             </button>
@@ -561,8 +575,9 @@ export function TerminalSidebar({
                                 e.stopPropagation();
                                 showContextMenu(e.clientX, e.clientY, 'deployment', dep.name);
                               }}
-                              style={styles.moreButton}
-                              title="More actions"
+                              style={isInEditMode ? {...styles.moreButton, ...styles.disabledButton} : styles.moreButton}
+                              title={isInEditMode ? 'Cannot perform actions while in edit mode' : 'More actions'}
+                              disabled={isInEditMode}
                             >
                               ⋯
                             </button>
@@ -639,12 +654,12 @@ export function TerminalSidebar({
                             const [ns, name] = cj.name.split('/');
                             const favorites = getFavoriteActions('cronjob', {
                               resourceName: name,
-                              namespace: ns,
+                              namespace: cj.namespace,
                               resourceType: 'cronjob',
                             });
                             const contextActions = getContextMenuActions('cronjob', {
                               resourceName: name,
-                              namespace: ns,
+                              namespace: cj.namespace,
                               resourceType: 'cronjob',
                             });
                             return (
@@ -654,8 +669,9 @@ export function TerminalSidebar({
                                   <button
                                     key={action.id}
                                     onClick={() => onResourceAction(action.id, 'cronjob', name)}
-                                    style={styles.actionButton}
-                                    title={action.description}
+                                    style={isInEditMode ? {...styles.actionButton, ...styles.disabledButton} : styles.actionButton}
+                                    title={isInEditMode ? 'Cannot perform actions while in edit mode' : action.description}
+                                    disabled={isInEditMode}
                                   >
                                     {action.icon} {action.label}
                                   </button>
@@ -667,8 +683,9 @@ export function TerminalSidebar({
                                       e.stopPropagation();
                                       showContextMenu(e.clientX, e.clientY, 'cronjob', name);
                                     }}
-                                    style={styles.moreButton}
-                                    title="More actions"
+                                    style={isInEditMode ? {...styles.moreButton, ...styles.disabledButton} : styles.moreButton}
+                                    title={isInEditMode ? 'Cannot perform actions while in edit mode' : 'More actions'}
+                                    disabled={isInEditMode}
                                   >
                                     ⋯
                                   </button>
@@ -837,6 +854,11 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     outline: 'none',
   },
+  disabledSelect: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
+    backgroundColor: '#2d2d2d',
+  },
   searchInput: {
     width: '100%',
     padding: '6px 8px',
@@ -945,6 +967,11 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '3px',
     cursor: 'pointer',
     fontWeight: 'bold',
+  },
+  disabledButton: {
+    opacity: 0.4,
+    cursor: 'not-allowed',
+    pointerEvents: 'none',
   },
   contextMenu: {
     position: 'fixed',

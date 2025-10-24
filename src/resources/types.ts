@@ -21,6 +21,23 @@ export interface ResourceActionContext {
   resourceType: ResourceType;
 }
 
+/**
+ * Helper function to generate kubectl command with namespace
+ * Use this for resources that need explicit namespace
+ */
+export function kubectl(namespace: string, command: string): string {
+  return `kubectl -n ${namespace} ${command}`;
+}
+
+/**
+ * Helper function for resources where namespace is in the resource name
+ * (e.g., cronjobs stored as "namespace/name")
+ * Uses the namespace from the resource name itself
+ */
+export function kubectlWithNs(command: string): string {
+  return `kubectl ${command}`;
+}
+
 export type PromptFieldType = 'text' | 'number' | 'confirm' | 'select';
 
 export interface PromptField {
@@ -77,6 +94,10 @@ export interface ResourceDefinition {
   type: ResourceType;
   displayName: string;
   pluralName: string;
+  /**
+   * kubectl resource name (usually singular, but can be plural like 'cronjobs')
+   */
+  kubectlName?: string;
   /**
    * Get all available actions for this resource
    */

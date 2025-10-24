@@ -3,7 +3,7 @@
  * Independent file containing all deployment-specific actions
  */
 
-import { ResourceDefinition, ResourceAction } from './types';
+import { ResourceDefinition, ResourceAction, kubectl } from './types';
 
 const viewAction: ResourceAction = {
   id: 'view',
@@ -11,7 +11,7 @@ const viewAction: ResourceAction = {
   icon: '👁️',
   description: 'View deployment YAML',
   isFavorite: true,
-  getCommand: (ctx) => `kubectl get deployment ${ctx.resourceName} -n ${ctx.namespace} -o yaml\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `get deployment ${ctx.resourceName} -o yaml\n`),
 };
 
 const describeAction: ResourceAction = {
@@ -19,7 +19,7 @@ const describeAction: ResourceAction = {
   label: 'Describe',
   icon: '📋',
   description: 'Describe deployment details',
-  getCommand: (ctx) => `kubectl describe deployment ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `describe deployment ${ctx.resourceName}\n`),
 };
 
 const editAction: ResourceAction = {
@@ -28,7 +28,7 @@ const editAction: ResourceAction = {
   icon: '✏️',
   description: 'Edit deployment configuration',
   isFavorite: true,
-  getCommand: (ctx) => `kubectl edit deployment ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `edit deployment ${ctx.resourceName}\n`),
 };
 
 const logsAction: ResourceAction = {
@@ -37,7 +37,7 @@ const logsAction: ResourceAction = {
   icon: '📜',
   description: 'Show deployment logs (follow)',
   isFavorite: true,
-  getCommand: (ctx) => `kubectl logs deploy/${ctx.resourceName} -n ${ctx.namespace} --tail=200 -f\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `logs deploy/${ctx.resourceName} --tail=200 -f\n`),
 };
 
 const scaleAction: ResourceAction = {
@@ -63,7 +63,7 @@ const scaleAction: ResourceAction = {
   ],
   getCommand: (ctx, values) => {
     const replicas = values?.replicas || 1;
-    return `kubectl scale deployment ${ctx.resourceName} -n ${ctx.namespace} --replicas=${replicas}\n`;
+    return kubectl(ctx.namespace, `scale deployment ${ctx.resourceName} --replicas=${replicas}\n`);
   },
 };
 
@@ -72,7 +72,7 @@ const restartAction: ResourceAction = {
   label: 'Restart',
   icon: '🔄',
   description: 'Restart deployment',
-  getCommand: (ctx) => `kubectl rollout restart deployment ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `rollout restart deployment ${ctx.resourceName}\n`),
 };
 
 const rolloutStatusAction: ResourceAction = {
@@ -80,7 +80,7 @@ const rolloutStatusAction: ResourceAction = {
   label: 'Rollout Status',
   icon: '📊',
   description: 'Check rollout status',
-  getCommand: (ctx) => `kubectl rollout status deployment ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `rollout status deployment ${ctx.resourceName}\n`),
 };
 
 const rolloutHistoryAction: ResourceAction = {
@@ -88,7 +88,7 @@ const rolloutHistoryAction: ResourceAction = {
   label: 'History',
   icon: '📜',
   description: 'View rollout history',
-  getCommand: (ctx) => `kubectl rollout history deployment ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `rollout history deployment ${ctx.resourceName}\n`),
 };
 
 const eventsAction: ResourceAction = {
@@ -97,7 +97,7 @@ const eventsAction: ResourceAction = {
   icon: '📅',
   description: 'Show deployment events',
   getCommand: (ctx) => 
-    `kubectl get events -n ${ctx.namespace} --field-selector involvedObject.name=${ctx.resourceName}\n`,
+    kubectl(ctx.namespace, `get events --field-selector involvedObject.name=${ctx.resourceName}\n`),
 };
 
 const deleteAction: ResourceAction = {
@@ -106,7 +106,7 @@ const deleteAction: ResourceAction = {
   icon: '🗑️',
   description: 'Delete deployment',
   confirmMessage: (ctx) => `Are you sure you want to delete deployment "${ctx.resourceName}"? This will terminate all pods. This action cannot be undone.`,
-  getCommand: (ctx) => `kubectl delete deployment ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `delete deployment ${ctx.resourceName}\n`),
 };
 
 /**

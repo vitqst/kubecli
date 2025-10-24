@@ -49,6 +49,7 @@ function App() {
     prompts?: any[];
     confirmMessage?: string;
   } | null>(null);
+  const [isInEditMode, setIsInEditMode] = useState<boolean>(false);
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
@@ -153,12 +154,23 @@ function App() {
     }, 50);
   }, [selectedContext]);
 
+  // Handle edit mode changes from terminal
+  const handleEditModeChange = useCallback((isEditMode: boolean) => {
+    setIsInEditMode(isEditMode);
+  }, []);
+
   // Generic resource action handler - SOLID principle: Single Responsibility
   // This handler delegates to the resource action system instead of having
   // multiple specific handlers for each resource type and action
   const handleResourceAction = useCallback(
     (actionId: string, resourceType: ResourceType, resourceName: string) => {
       if (!window.terminal || !selectedNamespace) return;
+      
+      // Prevent actions when in edit mode
+      if (isInEditMode) {
+        console.warn('Cannot execute action while terminal is in edit mode');
+        return;
+      }
 
       const context: ResourceActionContext = {
         resourceName,
@@ -198,7 +210,7 @@ function App() {
       // Execute action directly if no prompts needed
       executeAction(actionId, context, {});
     },
-    [selectedNamespace]
+    [selectedNamespace, isInEditMode]
   );
 
   // Execute action with prompt values
@@ -401,6 +413,7 @@ function App() {
               selectedNamespace={selectedNamespace}
               namespaces={namespaces}
               loadingNamespaces={loadingNamespaces}
+              isInEditMode={isInEditMode}
               onConfigChange={handleConfigChange}
               onContextChange={handleContextChange}
               onNamespaceChange={handleNamespaceChange}
@@ -414,6 +427,7 @@ function App() {
                   KUBECTL_NAMESPACE: selectedNamespace 
                 }}
                 isLoading={isConfigChanging}
+                onEditModeChange={handleEditModeChange}
               />
             </div>
           </div>

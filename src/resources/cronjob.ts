@@ -1,9 +1,12 @@
 /**
  * CronJob Resource Definition
  * Independent file containing all cronjob-specific actions
+ * 
+ * Note: CronJobs in TerminalSidebar are stored as "namespace/name"
+ * so we use kubectlWithNs() helper which doesn't add -n flag
  */
 
-import { ResourceDefinition, ResourceAction } from './types';
+import { ResourceDefinition, ResourceAction, kubectl } from './types';
 
 const viewAction: ResourceAction = {
   id: 'view',
@@ -11,7 +14,7 @@ const viewAction: ResourceAction = {
   icon: '👁️',
   description: 'View cronjob YAML',
   isFavorite: true,
-  getCommand: (ctx) => `kubectl get cronjob ${ctx.resourceName} -n ${ctx.namespace} -o yaml\n`,
+  getCommand: (ctx) =>  kubectl(ctx.namespace, `get cronjobs/${ctx.resourceName} -o yaml\n`),
 };
 
 const describeAction: ResourceAction = {
@@ -19,7 +22,7 @@ const describeAction: ResourceAction = {
   label: 'Describe',
   icon: '📋',
   description: 'Describe cronjob details',
-  getCommand: (ctx) => `kubectl describe cronjob ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `describe cronjobs/${ctx.resourceName}\n`),
 };
 
 const editAction: ResourceAction = {
@@ -28,7 +31,7 @@ const editAction: ResourceAction = {
   icon: '✏️',
   description: 'Edit cronjob configuration',
   isFavorite: true,
-  getCommand: (ctx) => `kubectl edit cronjob ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `edit cronjobs/${ctx.resourceName}\n`),
 };
 
 const triggerAction: ResourceAction = {
@@ -36,7 +39,7 @@ const triggerAction: ResourceAction = {
   label: 'Trigger',
   icon: '▶️',
   description: 'Create job from cronjob',
-  getCommand: (ctx) => `kubectl create job --from=cronjob/${ctx.resourceName} ${ctx.resourceName}-manual-$(date +%s) -n ${ctx.namespace}\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `create job --from=cronjobs/${ctx.resourceName} ${ctx.resourceName}-manual-$(date +%s) -n ${ctx.namespace}\n`),
 };
 
 const suspendAction: ResourceAction = {
@@ -44,7 +47,7 @@ const suspendAction: ResourceAction = {
   label: 'Suspend',
   icon: '⏸️',
   description: 'Suspend cronjob',
-  getCommand: (ctx) => `kubectl patch cronjob ${ctx.resourceName} -n ${ctx.namespace} -p '{"spec":{"suspend":true}}'\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `patch cronjobs/${ctx.resourceName} -p '{"spec":{"suspend":true}}'\n`),
 };
 
 const resumeAction: ResourceAction = {
@@ -52,7 +55,7 @@ const resumeAction: ResourceAction = {
   label: 'Resume',
   icon: '▶️',
   description: 'Resume cronjob',
-  getCommand: (ctx) => `kubectl patch cronjob ${ctx.resourceName} -n ${ctx.namespace} -p '{"spec":{"suspend":false}}'\n`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `patch cronjobs/${ctx.resourceName} -p '{"spec":{"suspend":false}}'\n`),
 };
 
 const eventsAction: ResourceAction = {
@@ -61,7 +64,7 @@ const eventsAction: ResourceAction = {
   icon: '📅',
   description: 'Show cronjob events',
   getCommand: (ctx) => 
-    `kubectl get events -n ${ctx.namespace} --field-selector involvedObject.name=${ctx.resourceName}\n`,
+    kubectl(ctx.namespace, `get events --field-selector involvedObject.name=${ctx.resourceName}\n`),
 };
 
 const deleteAction: ResourceAction = {
@@ -69,7 +72,8 @@ const deleteAction: ResourceAction = {
   label: 'Delete',
   icon: '🗑️',
   description: 'Delete cronjob',
-  getCommand: (ctx) => `kubectl delete cronjob ${ctx.resourceName} -n ${ctx.namespace}\n`,
+  confirmMessage: (ctx) => `Are you sure you want to delete cronjob "${ctx.resourceName}"? This action cannot be undone.`,
+  getCommand: (ctx) => kubectl(ctx.namespace, `delete cronjobs/${ctx.resourceName}\n`),
 };
 
 /**
@@ -79,6 +83,7 @@ export const cronjobResource: ResourceDefinition = {
   type: 'cronjob',
   displayName: 'CronJob',
   pluralName: 'CronJobs',
+  kubectlName: 'cronjobs',  // kubectl uses plural form
   getActions: () => [
     viewAction,
     describeAction,

@@ -10,6 +10,7 @@ export interface TerminalOptions {
 export class TerminalManager {
   private terminals: Map<string, pty.IPty> = new Map();
   private window: BrowserWindow | null = null;
+  private editModeStatus: Map<string, boolean> = new Map();
 
   setWindow(window: BrowserWindow): void {
     this.window = window;
@@ -41,6 +42,9 @@ export class TerminalManager {
 
     // Handle data from terminal
     ptyProcess.onData((data: string) => {
+      // Detect edit mode by looking for editor indicators
+      this.detectEditMode(id, data);
+      
       if (this.window && !this.window.isDestroyed()) {
         this.window.webContents.send('terminal:data', id, data);
       }
@@ -89,6 +93,7 @@ export class TerminalManager {
     }
 
     this.terminals.delete(id);
+    this.editModeStatus.delete(id);
     console.log(`[Terminal ${id}] Closed`);
   }
 
@@ -104,6 +109,61 @@ export class TerminalManager {
 
   getTerminalIds(): string[] {
     return Array.from(this.terminals.keys());
+  }
+
+  isInEditMode(id: string): boolean {
+    return this.editModeStatus.get(id) || false;
+  }
+
+  private detectEditMode(id: string, data: string): void {
+    // Detect when entering edit mode (vim, nano, vi, emacs)
+    // These patterns indicate an editor has taken over the terminal
+    const enterEditPatterns = [
+      /\x1b\[\?1049h/, // Vim/Vi alternate screen buffer (most reliable)
+      /\x1b\[\?47h/,   // Alternative screen mode
+      /GNU nano/,      // Nano editor
+    ];
+
+    // Detect when exiting edit mode
+    const exitEditPatterns = [
+      /\x1b\[\?1049l/, // Vim/Vi exit alternate screen
+      /\x1b\[\?47l/,   // Exit alternative screen mode
+    ];
+
+    const wasInEditMode = this.editModeStatus.get(id) || false;
+    let isInEditMode = wasInEditMode;
+
+    // Check for exiting edit mode FIRST (higher priority)
+    // This ensures we don't get stuck in edit mode
+    let hasExitPattern = false;
+    for (const pattern of exitEditPatterns) {
+      if (pattern.test(data)) {
+        isInEditMode = false;
+        hasExitPattern = true;
+        break;
+      }
+    }
+
+    // Only check for entering edit mode if we didn't find an exit pattern
+    if (!hasExitPattern) {
+      for (const pattern of enterEditPatterns) {
+        if (pattern.test(data)) {
+          isInEditMode = true;
+          break;
+        }
+      }
+    }
+
+    // Update status and notify renderer if changed
+    if (isInEditMode !== wasInEditMode) {
+      this.editModeStatus.set(id, isInEditMode);
+      
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.webContents.send('terminal:edit-mode', id, isInEditMode);
+      }
+      
+      console.log(`[Terminal ${id}] Edit mode: ${isInEditMode}`);
+    }
   }
 
   private getDefaultShell(): string {

@@ -74,4 +74,10 @@ contextBridge.exposeInMainWorld('terminal', {
     // Return cleanup function
     return () => ipcRenderer.removeListener('terminal:exit', handler);
   },
+  onEditMode: (callback: (id: string, isEditMode: boolean) => void) => {
+    const handler = (_event: any, id: string, isEditMode: boolean) => callback(id, isEditMode);
+    ipcRenderer.on('terminal:edit-mode', handler);
+    // Return cleanup function
+    return () => ipcRenderer.removeListener('terminal:edit-mode', handler);
+  },
 });

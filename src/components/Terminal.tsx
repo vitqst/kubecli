@@ -9,10 +9,11 @@ interface TerminalProps {
   env?: Record<string, string>;
   onReady?: () => void;
   onExit?: (exitCode: number, signal?: number) => void;
+  onEditModeChange?: (isEditMode: boolean) => void;
   isLoading?: boolean;
 }
 
-export function Terminal({ id, cwd, env, onReady, onExit, isLoading = false }: TerminalProps) {
+export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLoading = false }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -40,14 +41,12 @@ export function Terminal({ id, cwd, env, onReady, onExit, isLoading = false }: T
         messages.push(`\x1b[36m✓ KUBECONFIG: ${env.KUBECONFIG}\x1b[0m`);
       }
       
-      // Update kubectl alias when namespace changes
+      // Export namespace as environment variable (no alias needed - helpers handle it)
       if (env.KUBECTL_NAMESPACE) {
         const namespace = env.KUBECTL_NAMESPACE;
         commands.push(`export KUBECTL_NAMESPACE=${namespace}`);
-        commands.push(`alias kubectl='kubectl -n ${namespace}'`);
         
         messages.push(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
-        messages.push(`\x1b[90m  All kubectl commands will use -n ${namespace}\x1b[0m`);
       }
       
       // Clear and write everything in one operation to prevent double blink
@@ -145,17 +144,10 @@ export function Terminal({ id, cwd, env, onReady, onExit, isLoading = false }: T
         console.log(`[Terminal ${id}] Created successfully`);
         setIsReady(true);
         
-        // Set up kubectl alias with namespace if provided
-        if (env?.KUBECTL_NAMESPACE && window.terminal) {
+        // Show namespace info (no alias needed - helpers handle namespace)
+        if (env?.KUBECTL_NAMESPACE) {
           const namespace = env.KUBECTL_NAMESPACE;
-          const aliasCommand = `alias kubectl='kubectl -n ${namespace}'\n`;
-          window.terminal.write(id, aliasCommand).catch((err) => {
-            console.error('Failed to set kubectl alias:', err);
-          });
-          
-          // Show info message
-          xterm.writeln(`\x1b[32m✓ kubectl configured for namespace: ${namespace}\x1b[0m`);
-          xterm.writeln(`\x1b[36mℹ All kubectl commands will use -n ${namespace} automatically\x1b[0m`);
+          xterm.writeln(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
           xterm.writeln('');
         }
         
@@ -315,6 +307,18 @@ export function Terminal({ id, cwd, env, onReady, onExit, isLoading = false }: T
     
     const cleanupExitHandler = window.terminal.onExit(exitHandler);
 
+    // Handle edit mode changes
+    const editModeHandler = (termId: string, isEditMode: boolean) => {
+      if (termId === id) {
+        console.log(`[Terminal ${id}] Edit mode changed: ${isEditMode}`);
+        if (onEditModeChange) {
+          onEditModeChange(isEditMode);
+        }
+      }
+    };
+    
+    const cleanupEditModeHandler = window.terminal.onEditMode(editModeHandler);
+
     // Handle window resize - make terminal grow with window
     const handleResize = () => {
       // Early return if component is unmounted
@@ -397,6 +401,7 @@ export function Terminal({ id, cwd, env, onReady, onExit, isLoading = false }: T
       // Cleanup event listeners
       if (cleanupDataHandler) cleanupDataHandler();
       if (cleanupExitHandler) cleanupExitHandler();
+      if (cleanupEditModeHandler) cleanupEditModeHandler();
       
       // Close backend terminal
       if (window.terminal) {
