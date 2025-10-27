@@ -19,23 +19,141 @@ interface CommandItem {
   actionIcon: string;
   actionDescription: string;
   searchText: string;
+  score?: number; // Fuzzy match score for sorting
 }
 
-// Fuzzy match helper - checks if all characters in query appear in target in order
-function fuzzyMatch(target: string, query: string): boolean {
-  if (!query) return true;
+// Fuzzy match with scoring - returns score (higher is better) or null if no match
+function fuzzyMatchScore(target: string, query: string): number | null {
+  if (!query) return 0;
   
   const targetLower = target.toLowerCase();
   const queryLower = query.toLowerCase();
   
+  // Check for exact match (highest score)
+  if (targetLower === queryLower) return 10000;
+  
+  // Check for exact substring match (very high score)
+  if (targetLower.includes(queryLower)) {
+    const index = targetLower.indexOf(queryLower);
+    // Bonus if match is at start
+    const startBonus = index === 0 ? 1000 : 0;
+    return 5000 + startBonus;
+  }
+  
+  // Fuzzy match with scoring
+  let score = 0;
   let queryIndex = 0;
+  let consecutiveMatches = 0;
+  let lastMatchIndex = -2;
+  
   for (let i = 0; i < targetLower.length && queryIndex < queryLower.length; i++) {
     if (targetLower[i] === queryLower[queryIndex]) {
+      // Base score for match
+      score += 100;
+      
+      // Bonus for consecutive matches
+      if (i === lastMatchIndex + 1) {
+        consecutiveMatches++;
+        score += consecutiveMatches * 50; // Increasing bonus for longer sequences
+      } else {
+        consecutiveMatches = 0;
+      }
+      
+      // Bonus for match at word boundary (start, after dash, underscore, space)
+      if (i === 0 || targetLower[i - 1] === '-' || targetLower[i - 1] === '_' || targetLower[i - 1] === ' ') {
+        score += 200;
+      }
+      
+      // Bonus for case match
+      if (target[i] === query[queryIndex]) {
+        score += 50;
+      }
+      
+      lastMatchIndex = i;
       queryIndex++;
     }
   }
   
-  return queryIndex === queryLower.length;
+  // Return null if not all characters matched
+  if (queryIndex !== queryLower.length) return null;
+  
+  // Penalty for length difference (prefer shorter targets)
+  score -= (target.length - query.length) * 2;
+  
+  return score;
+}
+
+// Fuzzy match helper - checks if all characters in query appear in target in order
+function fuzzyMatch(target: string, query: string): boolean {
+  return fuzzyMatchScore(target, query) !== null;
+}
+
+// Fuzzy match with indices - returns array of matched character positions
+function fuzzyMatchWithIndices(target: string, query: string): number[] | null {
+  if (!query) return [];
+  
+  const targetLower = target.toLowerCase();
+  const queryLower = query.toLowerCase();
+  const indices: number[] = [];
+  
+  let queryIndex = 0;
+  for (let i = 0; i < targetLower.length && queryIndex < queryLower.length; i++) {
+    if (targetLower[i] === queryLower[queryIndex]) {
+      indices.push(i);
+      queryIndex++;
+    }
+  }
+  
+  return queryIndex === queryLower.length ? indices : null;
+}
+
+// Highlight component - highlights matched characters
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  const indices = fuzzyMatchWithIndices(text, query);
+  
+  if (!indices || indices.length === 0) {
+    return <>{text}</>;
+  }
+  
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  
+  indices.forEach((matchIndex, i) => {
+    // Add text before match
+    if (matchIndex > lastIndex) {
+      parts.push(
+        <span key={`text-${i}`}>
+          {text.substring(lastIndex, matchIndex)}
+        </span>
+      );
+    }
+    
+    // Add highlighted match
+    parts.push(
+      <span key={`match-${i}`} style={{
+        backgroundColor: '#094771',
+        color: '#4fc3f7',
+        fontWeight: 600,
+        padding: '0 1px',
+        borderRadius: '2px',
+      }}>
+        {text[matchIndex]}
+      </span>
+    );
+    
+    lastIndex = matchIndex + 1;
+  });
+  
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(
+      <span key="text-end">
+        {text.substring(lastIndex)}
+      </span>
+    );
+  }
+  
+  return <>{parts}</>;
 }
 
 export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextMenu }: CommandPaletteProps) {
@@ -105,32 +223,133 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
     return items;
   }, [resources]);
   
+  // Extract query parts for highlighting
+  const queryParts = React.useMemo(() => {
+    if (!searchQuery) return { action: '', type: '', name: '' };
+    
+    const lowerQuery = searchQuery.toLowerCase();
+    
+    // action@type:name
+    const actionAtTypeNameMatch = lowerQuery.match(/^([^@]+)@([^:]+):(.*)$/);
+    if (actionAtTypeNameMatch) {
+      return {
+        action: actionAtTypeNameMatch[1],
+        type: actionAtTypeNameMatch[2],
+        name: actionAtTypeNameMatch[3],
+      };
+    }
+    
+    // action@name
+    const actionAtMatch = lowerQuery.match(/^(\w+)@(.*)$/);
+    if (actionAtMatch) {
+      return {
+        action: actionAtMatch[1],
+        type: '',
+        name: actionAtMatch[2],
+      };
+    }
+    
+    // @action
+    if (lowerQuery.startsWith('@')) {
+      return {
+        action: lowerQuery.substring(1),
+        type: '',
+        name: '',
+      };
+    }
+    
+    // resource:name@action or resource:name
+    if (lowerQuery.includes(':')) {
+      const [beforeAt, afterAt] = lowerQuery.split('@');
+      const [type, name] = beforeAt.split(':');
+      return {
+        action: afterAt || '',
+        type: type || '',
+        name: name || '',
+      };
+    }
+    
+    // Plain search - highlight everywhere
+    return {
+      action: lowerQuery,
+      type: lowerQuery,
+      name: lowerQuery,
+    };
+  }, [searchQuery]);
+  
   // Filter command items by search query
   const filteredCommands = React.useMemo(() => {
     if (!searchQuery) return [];
     
     const lowerQuery = searchQuery.toLowerCase();
     
+    // Check for action@type:name syntax (e.g., logs@pod:nginx or exec@deploy:api)
+    const actionAtTypeNameMatch = lowerQuery.match(/^([^@]+)@([^:]+):(.*)$/);
+    if (actionAtTypeNameMatch) {
+      const [, actionFilter, typeFilter, nameFilter] = actionAtTypeNameMatch;
+      
+      const results = allCommandItems
+        .map(item => {
+          // Skip app actions for resource-specific syntax
+          if (item.type === 'app-action') return null;
+          
+          const actionScore = fuzzyMatchScore(item.actionLabel, actionFilter) ?? 
+                             fuzzyMatchScore(item.actionId, actionFilter) ?? 0;
+          const typeScore = fuzzyMatchScore(item.resourceType!, typeFilter) ?? 0;
+          const nameScore = !nameFilter.trim() ? 0 : 
+                           Math.max(
+                             fuzzyMatchScore(item.resourceName!, nameFilter.trim()) ?? 0,
+                             fuzzyMatchScore(item.namespace!, nameFilter.trim()) ?? 0
+                           );
+          
+          const actionMatches = actionScore > 0;
+          const typeMatches = typeScore > 0;
+          const nameMatches = !nameFilter.trim() || nameScore > 0;
+          
+          if (!actionMatches || !typeMatches || !nameMatches) return null;
+          
+          return { ...item, score: actionScore + typeScore + nameScore };
+        })
+        .filter((item): item is CommandItem => item !== null)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 20);
+      
+      return results;
+    }
+    
     // Check for action@resourcename syntax (e.g., logs@nginx or exec@api or trigg@)
     const actionAtMatch = lowerQuery.match(/^(\w+)@(.*)$/);
     if (actionAtMatch) {
       const [, actionFilter, nameFilter] = actionAtMatch;
       
-      return allCommandItems.filter(item => {
-        const actionMatches = item.actionLabel.toLowerCase().includes(actionFilter) || 
-                             item.actionId.toLowerCase().includes(actionFilter);
-        
-        // App actions don't have resource names
-        if (item.type === 'app-action') {
-          return actionMatches;
-        }
-        
-        const nameMatches = !nameFilter.trim() || 
-                           fuzzyMatch(item.resourceName!, nameFilter.trim()) || 
-                           fuzzyMatch(item.namespace!, nameFilter.trim());
-        
-        return actionMatches && nameMatches;
-      }).slice(0, 20);
+      const results = allCommandItems
+        .map(item => {
+          const actionScore = fuzzyMatchScore(item.actionLabel, actionFilter) ?? 
+                             fuzzyMatchScore(item.actionId, actionFilter) ?? 0;
+          
+          // App actions don't have resource names
+          if (item.type === 'app-action') {
+            return actionScore > 0 ? { ...item, score: actionScore } : null;
+          }
+          
+          const nameScore = !nameFilter.trim() ? 0 : 
+                           Math.max(
+                             fuzzyMatchScore(item.resourceName!, nameFilter.trim()) ?? 0,
+                             fuzzyMatchScore(item.namespace!, nameFilter.trim()) ?? 0
+                           );
+          
+          const actionMatches = actionScore > 0;
+          const nameMatches = !nameFilter.trim() || nameScore > 0;
+          
+          if (!actionMatches || !nameMatches) return null;
+          
+          return { ...item, score: actionScore + nameScore };
+        })
+        .filter((item): item is CommandItem => item !== null)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 20);
+      
+      return results;
     }
     
     // Check for @action syntax (e.g., @logs or @exec)
@@ -139,10 +358,18 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
       
       if (!actionFilter) return []; // Just "@" with nothing after
       
-      return allCommandItems.filter(item => {
-        return item.actionLabel.toLowerCase().includes(actionFilter) || 
-               item.actionId.toLowerCase().includes(actionFilter);
-      }).slice(0, 20);
+      const results = allCommandItems
+        .map(item => {
+          const actionScore = fuzzyMatchScore(item.actionLabel, actionFilter) ?? 
+                             fuzzyMatchScore(item.actionId, actionFilter) ?? 0;
+          
+          return actionScore > 0 ? { ...item, score: actionScore } : null;
+        })
+        .filter((item): item is CommandItem => item !== null)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 20);
+      
+      return results;
     }
     
     // Check for resource:name@action syntax (e.g., pod:nginx@logs)
@@ -150,20 +377,36 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
       const [beforeAt, actionFilter = ''] = lowerQuery.split('@');
       const [resourceType, name = ''] = beforeAt.split(':');
       
-      return allCommandItems.filter(item => {
-        // Skip app actions for resource-specific syntax
-        if (item.type === 'app-action') return false;
-        
-        const typeMatches = item.resourceType!.toLowerCase().includes(resourceType);
-        const nameMatches = !name || 
-                           fuzzyMatch(item.resourceName!, name) ||
-                           fuzzyMatch(item.namespace!, name);
-        const actionMatches = !actionFilter ||
-                             item.actionLabel.toLowerCase().includes(actionFilter) ||
-                             item.actionId.toLowerCase().includes(actionFilter);
-        
-        return typeMatches && nameMatches && actionMatches;
-      }).slice(0, 20);
+      const results = allCommandItems
+        .map(item => {
+          // Skip app actions for resource-specific syntax
+          if (item.type === 'app-action') return null;
+          
+          const typeScore = fuzzyMatchScore(item.resourceType!, resourceType) ?? 0;
+          const nameScore = !name ? 0 : 
+                           Math.max(
+                             fuzzyMatchScore(item.resourceName!, name) ?? 0,
+                             fuzzyMatchScore(item.namespace!, name) ?? 0
+                           );
+          const actionScore = !actionFilter ? 0 : 
+                             Math.max(
+                               fuzzyMatchScore(item.actionLabel, actionFilter) ?? 0,
+                               fuzzyMatchScore(item.actionId, actionFilter) ?? 0
+                             );
+          
+          const typeMatches = typeScore > 0;
+          const nameMatches = !name || nameScore > 0;
+          const actionMatches = !actionFilter || actionScore > 0;
+          
+          if (!typeMatches || !nameMatches || !actionMatches) return null;
+          
+          return { ...item, score: typeScore + nameScore + actionScore };
+        })
+        .filter((item): item is CommandItem => item !== null)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 20);
+      
+      return results;
     }
     
     // Check for resource:name syntax (e.g., pod:nginx)
@@ -172,23 +415,43 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
       const resourceTypeFilter = parts[0];
       const nameFilter = parts[1] || '';
       
-      return allCommandItems.filter(item => {
-        // Skip app actions for resource-specific syntax
-        if (item.type === 'app-action') return false;
-        
-        const typeMatches = item.resourceType!.toLowerCase().includes(resourceTypeFilter);
-        const nameMatches = !nameFilter.trim() || 
-                           fuzzyMatch(item.resourceName!, nameFilter.trim()) || 
-                           fuzzyMatch(item.namespace!, nameFilter.trim());
-        
-        return typeMatches && nameMatches;
-      }).slice(0, 20);
+      const results = allCommandItems
+        .map(item => {
+          // Skip app actions for resource-specific syntax
+          if (item.type === 'app-action') return null;
+          
+          const typeScore = fuzzyMatchScore(item.resourceType!, resourceTypeFilter) ?? 0;
+          const nameScore = !nameFilter.trim() ? 0 : 
+                           Math.max(
+                             fuzzyMatchScore(item.resourceName!, nameFilter.trim()) ?? 0,
+                             fuzzyMatchScore(item.namespace!, nameFilter.trim()) ?? 0
+                           );
+          
+          const typeMatches = typeScore > 0;
+          const nameMatches = !nameFilter.trim() || nameScore > 0;
+          
+          if (!typeMatches || !nameMatches) return null;
+          
+          return { ...item, score: typeScore + nameScore };
+        })
+        .filter((item): item is CommandItem => item !== null)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .slice(0, 20);
+      
+      return results;
     }
     
-    // Plain search - search in all fields
-    return allCommandItems.filter(item => 
-      item.searchText.includes(lowerQuery)
-    ).slice(0, 20);
+    // Plain search - search in all fields with scoring
+    const results = allCommandItems
+      .map(item => {
+        const score = fuzzyMatchScore(item.searchText, lowerQuery) ?? 0;
+        return score > 0 ? { ...item, score } : null;
+      })
+      .filter((item): item is CommandItem => item !== null)
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .slice(0, 20);
+    
+    return results;
   }, [searchQuery, allCommandItems]);
 
   // Focus input when opened
@@ -383,14 +646,26 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
                         <div style={styles.commandIcon}>{command.actionIcon}</div>
                         <div style={styles.commandContent}>
                           <div style={styles.commandTitle}>
-                            {command.type === 'app-action' ? command.actionLabel : `${command.actionLabel}: ${command.resourceName}`}
+                            {command.type === 'app-action' ? (
+                              <HighlightedText text={command.actionLabel} query={queryParts.action} />
+                            ) : (
+                              <>
+                                <HighlightedText text={command.actionLabel} query={queryParts.action} />
+                                {': '}
+                                <HighlightedText text={command.resourceName!} query={queryParts.name} />
+                              </>
+                            )}
                           </div>
                           <div style={styles.commandSubtitle}>
                             {command.type === 'resource-action' ? (
                               <>
-                                <span style={styles.commandNamespace}>{command.namespace}</span>
+                                <span style={styles.commandNamespace}>
+                                  <HighlightedText text={command.namespace!} query={queryParts.name} />
+                                </span>
                                 <span style={styles.commandSeparator}>•</span>
-                                <span style={styles.commandType}>{command.resourceType}</span>
+                                <span style={styles.commandType}>
+                                  <HighlightedText text={command.resourceType!} query={queryParts.type} />
+                                </span>
                                 {resource?.info && (
                                   <>
                                     <span style={styles.commandSeparator}>•</span>
@@ -441,8 +716,8 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
                   <span style={styles.exampleDesc}>Logs for nginx resources</span>
                 </div>
                 <div style={styles.exampleItem}>
-                  <code style={styles.exampleCode}>exec@api</code>
-                  <span style={styles.exampleDesc}>Exec into api resources</span>
+                  <code style={styles.exampleCode}>exec@pod:api</code>
+                  <span style={styles.exampleDesc}>Exec into api pods</span>
                 </div>
                 <div style={styles.exampleItem}>
                   <code style={styles.exampleCode}>@logs</code>
@@ -453,12 +728,16 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
               <div style={styles.instructionSection}>
                 <div style={styles.sectionTitle}>Combine Filters</div>
                 <div style={styles.exampleItem}>
-                  <code style={styles.exampleCode}>pod:nginx@logs</code>
+                  <code style={styles.exampleCode}>logs@pod:nginx</code>
                   <span style={styles.exampleDesc}>Logs for nginx pods</span>
                 </div>
                 <div style={styles.exampleItem}>
-                  <code style={styles.exampleCode}>deploy:@scale</code>
-                  <span style={styles.exampleDesc}>Scale all deployments</span>
+                  <code style={styles.exampleCode}>scale@deploy:api</code>
+                  <span style={styles.exampleDesc}>Scale api deployments</span>
+                </div>
+                <div style={styles.exampleItem}>
+                  <code style={styles.exampleCode}>edit@cron:backup</code>
+                  <span style={styles.exampleDesc}>Edit backup cronjobs</span>
                 </div>
               </div>
             </div>

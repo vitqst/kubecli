@@ -170,8 +170,8 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
     // Handle keyboard shortcuts for copy/paste
     xterm.attachCustomKeyEventHandler((event) => {
       // Allow global shortcuts to bubble up
-      // Ctrl+P / Cmd+P - Command Palette
-      if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
+      // Ctrl+Shift+P / Cmd+Shift+P - Command Palette
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'P') {
         return false; // Let it bubble to global handler
       }
       

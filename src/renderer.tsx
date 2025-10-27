@@ -74,11 +74,11 @@ function App() {
     }
   }, []);
 
-  // Keyboard shortcut: Ctrl+P to open command palette
+  // Keyboard shortcut: Ctrl+Shift+P to open command palette (VSCode style)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+P or Cmd+P (Mac)
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+      // Ctrl+Shift+P or Cmd+Shift+P (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
         e.preventDefault();
         setIsCommandPaletteOpen(true);
       }
