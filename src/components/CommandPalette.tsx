@@ -19,7 +19,10 @@ interface CommandItem {
   actionIcon: string;
   actionDescription: string;
   searchText: string;
-  score?: number; // Fuzzy match score for sorting
+}
+
+interface ScoredCommandItem extends CommandItem {
+  score: number; // Fuzzy match score for sorting
 }
 
 // Fuzzy match with scoring - returns score (higher is better) or null if no match
@@ -308,10 +311,10 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           
           if (!actionMatches || !typeMatches || !nameMatches) return null;
           
-          return { ...item, score: actionScore + typeScore + nameScore };
+          return { ...item, score: actionScore + typeScore + nameScore } as ScoredCommandItem;
         })
-        .filter((item): item is CommandItem => item !== null)
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .filter((item): item is ScoredCommandItem => item !== null)
+        .sort((a, b) => b.score - a.score)
         .slice(0, 20);
       
       return results;
@@ -329,7 +332,7 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           
           // App actions don't have resource names
           if (item.type === 'app-action') {
-            return actionScore > 0 ? { ...item, score: actionScore } : null;
+            return actionScore > 0 ? { ...item, score: actionScore } as ScoredCommandItem : null;
           }
           
           const nameScore = !nameFilter.trim() ? 0 : 
@@ -343,10 +346,10 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           
           if (!actionMatches || !nameMatches) return null;
           
-          return { ...item, score: actionScore + nameScore };
+          return { ...item, score: actionScore + nameScore } as ScoredCommandItem;
         })
-        .filter((item): item is CommandItem => item !== null)
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .filter((item): item is ScoredCommandItem => item !== null)
+        .sort((a, b) => b.score - a.score)
         .slice(0, 20);
       
       return results;
@@ -363,10 +366,10 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           const actionScore = fuzzyMatchScore(item.actionLabel, actionFilter) ?? 
                              fuzzyMatchScore(item.actionId, actionFilter) ?? 0;
           
-          return actionScore > 0 ? { ...item, score: actionScore } : null;
+          return actionScore > 0 ? { ...item, score: actionScore } as ScoredCommandItem : null;
         })
-        .filter((item): item is CommandItem => item !== null)
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .filter((item): item is ScoredCommandItem => item !== null)
+        .sort((a, b) => b.score - a.score)
         .slice(0, 20);
       
       return results;
@@ -400,10 +403,10 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           
           if (!typeMatches || !nameMatches || !actionMatches) return null;
           
-          return { ...item, score: typeScore + nameScore + actionScore };
+          return { ...item, score: typeScore + nameScore + actionScore } as ScoredCommandItem;
         })
-        .filter((item): item is CommandItem => item !== null)
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .filter((item): item is ScoredCommandItem => item !== null)
+        .sort((a, b) => b.score - a.score)
         .slice(0, 20);
       
       return results;
@@ -432,10 +435,10 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           
           if (!typeMatches || !nameMatches) return null;
           
-          return { ...item, score: typeScore + nameScore };
+          return { ...item, score: typeScore + nameScore } as ScoredCommandItem;
         })
-        .filter((item): item is CommandItem => item !== null)
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+        .filter((item): item is ScoredCommandItem => item !== null)
+        .sort((a, b) => b.score - a.score)
         .slice(0, 20);
       
       return results;
@@ -445,10 +448,10 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
     const results = allCommandItems
       .map(item => {
         const score = fuzzyMatchScore(item.searchText, lowerQuery) ?? 0;
-        return score > 0 ? { ...item, score } : null;
+        return score > 0 ? { ...item, score } as ScoredCommandItem : null;
       })
-      .filter((item): item is CommandItem => item !== null)
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .filter((item): item is ScoredCommandItem => item !== null)
+      .sort((a, b) => b.score - a.score)
       .slice(0, 20);
     
     return results;
