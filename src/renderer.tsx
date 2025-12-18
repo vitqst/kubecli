@@ -11,7 +11,7 @@ import { ErrorProvider } from './contexts/ErrorContext';
 import { ErrorBanner } from './components/ErrorBanner';
 import { CommandPalette } from './components/CommandPalette';
 import { KubectlPalette } from './components/KubectlPalette';
-import { addRecentCommand } from './commands/quickCommands';
+import { addRecentCommand } from './commands';
 import { kube as kubeAPI, terminal as terminalAPI } from './api';
 
 type LoadState = 'idle' | 'loading' | 'error';
