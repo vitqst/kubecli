@@ -106,23 +106,27 @@ fn scan_kube_configs() -> Result<Vec<KubeConfigFile>, String> {
                 continue;
             }
 
-            // Try to read and parse as kubeconfig
+            // Try to read and parse as kubeconfig, check if it has contexts
             if let Ok(contents) = fs::read_to_string(&path) {
-                if is_valid_kubeconfig(&contents) {
-                    let name = if filename == "config" {
-                        "default".to_string()
-                    } else {
-                        // Use filename without extension
-                        filename.to_string()
-                    };
+                if let Ok(config) = serde_yaml::from_str::<KubeConfig>(&contents) {
+                    // Only include configs that have at least one context
+                    if let Some(contexts) = config.contexts {
+                        if !contexts.is_empty() {
+                            let name = if filename == "config" {
+                                "default".to_string()
+                            } else {
+                                filename.to_string()
+                            };
 
-                    let is_default = filename.to_lowercase() == "config";
+                            let is_default = filename.to_lowercase() == "config";
 
-                    configs.push(KubeConfigFile {
-                        path: path.to_string_lossy().to_string(),
-                        name,
-                        is_default,
-                    });
+                            configs.push(KubeConfigFile {
+                                path: path.to_string_lossy().to_string(),
+                                name,
+                                is_default,
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -144,27 +148,6 @@ fn scan_kube_configs() -> Result<Vec<KubeConfigFile>, String> {
     *cache = configs.clone();
 
     Ok(configs)
-}
-
-/// Check if a file contents is a valid kubeconfig by looking for typical kubeconfig structure
-fn is_valid_kubeconfig(contents: &str) -> bool {
-    // Try to parse as YAML first
-    if let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(contents) {
-        // Check for kubeconfig-like structure
-        if let Some(kind) = config.get("kind") {
-            let kind_str = kind.as_str().unwrap_or("");
-            if kind_str == "Config" {
-                return true;
-            }
-        }
-
-        // Alternative check: has required fields like "contexts" or "clusters"
-        if config.get("contexts").is_some() || config.get("clusters").is_some() {
-            return true;
-        }
-    }
-
-    false
 }
 
 pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary, String> {
