@@ -10,6 +10,8 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
+    "test": "vitest",
+    "test:run": "vitest run",
     "lint": "echo \"No linting configured\""
   },
   "keywords": [],
@@ -20,6 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
+    "@xterm/addon-unicode11": "^0.8.0",
     "electron-squirrel-startup": "^1.0.1",
     "node-pty": "^1.1.0-beta17",
     "react": "^19.2.0",
@@ -38,6 +41,9 @@
     "@electron-forge/plugin-webpack": "^7.4.0",
     "@electron/rebuild": "^4.0.1",
     "@tauri-apps/cli": "^2.9.6",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
     "@types/node": "^16.18.119",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
@@ -46,12 +52,14 @@
     "css-loader": "^7.1.2",
     "electron": "^28.3.3",
     "fork-ts-checker-webpack-plugin": "^9.0.2",
+    "jsdom": "^27.3.0",
     "node-loader": "^2.0.0",
     "style-loader": "^4.0.0",
     "ts-loader": "^9.5.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^4.0.16"
   },
   "config": {
     "forge": {
