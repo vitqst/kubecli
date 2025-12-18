@@ -18,6 +18,14 @@ pub struct KubeConfigSummary {
     pub current_context: String,
     pub contexts: Vec<ContextInfo>,
     pub config_path: String,
+    pub available_configs: Vec<KubeConfigFile>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct KubeConfigFile {
+    pub path: String,
+    pub name: String,
+    pub is_default: bool,
 }
 
 // Internal types for parsing kubeconfig YAML
@@ -49,6 +57,67 @@ fn get_default_config_path() -> PathBuf {
         .join("config")
 }
 
+fn scan_kube_configs() -> Result<Vec<KubeConfigFile>, String> {
+    let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
+    let kube_dir = home_dir.join(".kube");
+
+    // Check if ~/.kube directory exists
+    if !kube_dir.exists() {
+        return Ok(vec![]);
+    }
+
+    // Read directory entries
+    let entries = fs::read_dir(&kube_dir)
+        .map_err(|e| format!("Failed to read ~/.kube directory: {}", e))?;
+
+    let mut configs = Vec::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        // Check if file starts with "config" (case-insensitive)
+        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+            if filename.to_lowercase().starts_with("config") {
+                // Get file name without extension for display
+                let name = if filename == "config" {
+                    "default".to_string()
+                } else {
+                    // Remove "config" prefix and any extensions
+                    let stripped = filename.trim_start_matches("config");
+                    let cleaned = stripped.trim_start_matches('-').trim_start_matches('_');
+                    if cleaned.is_empty() {
+                        filename.to_string()
+                    } else {
+                        cleaned.to_string()
+                    }
+                };
+
+                let is_default = filename.to_lowercase() == "config";
+
+                configs.push(KubeConfigFile {
+                    path: path.to_string_lossy().to_string(),
+                    name,
+                    is_default,
+                });
+            }
+        }
+    }
+
+    // Sort: default config first, then alphabetically
+    configs.sort_by(|a, b| {
+        if a.is_default && !b.is_default {
+            std::cmp::Ordering::Less
+        } else if !a.is_default && b.is_default {
+            std::cmp::Ordering::Greater
+        } else {
+            a.name.cmp(&b.name)
+        }
+    });
+
+    Ok(configs)
+}
+
 pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary, String> {
     let path = config_path
         .map(PathBuf::from)
@@ -72,10 +141,18 @@ pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary
         })
         .collect();
 
+    // Scan for available kubeconfig files
+    let available_configs = scan_kube_configs()
+        .unwrap_or_else(|e| {
+            eprintln!("Warning: Failed to scan kube configs: {}", e);
+            vec![]
+        });
+
     Ok(KubeConfigSummary {
         current_context: config.current_context.unwrap_or_default(),
         contexts,
         config_path: path.to_string_lossy().to_string(),
+        available_configs,
     })
 }
 

@@ -9,10 +9,17 @@ interface TauriContextInfo {
   namespace: string | null;
 }
 
+interface TauriKubeConfigFile {
+  path: string;
+  name: string;
+  is_default: boolean;
+}
+
 interface TauriKubeConfigSummary {
   current_context: string;
   contexts: TauriContextInfo[];
   config_path: string;
+  available_configs: TauriKubeConfigFile[];
 }
 
 // Convert Tauri response to app's expected format
@@ -26,7 +33,11 @@ function convertSummary(tauri: TauriKubeConfigSummary): KubeConfigSummary {
       user: ctx.user,
       namespace: ctx.namespace ?? undefined,
     })),
-    availableConfigs: [], // Tauri doesn't support multiple configs yet
+    availableConfigs: tauri.available_configs.map(config => ({
+      path: config.path,
+      name: config.name,
+      isDefault: config.is_default,
+    })),
   };
 }
 
