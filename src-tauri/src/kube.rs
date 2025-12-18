@@ -76,30 +76,36 @@ fn scan_kube_configs() -> Result<Vec<KubeConfigFile>, String> {
         let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
         let path = entry.path();
 
-        // Check if file starts with "config" (case-insensitive)
+        // Skip directories
+        if path.is_dir() {
+            continue;
+        }
+
+        // Check if it's a file (not hidden like .env, .secrets)
         if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-            if filename.to_lowercase().starts_with("config") {
-                // Get file name without extension for display
-                let name = if filename == "config" {
-                    "default".to_string()
-                } else {
-                    // Remove "config" prefix and any extensions
-                    let stripped = filename.trim_start_matches("config");
-                    let cleaned = stripped.trim_start_matches('-').trim_start_matches('_');
-                    if cleaned.is_empty() {
-                        filename.to_string()
+            // Skip hidden files
+            if filename.starts_with('.') {
+                continue;
+            }
+
+            // Try to read and parse as kubeconfig
+            if let Ok(contents) = fs::read_to_string(&path) {
+                if is_valid_kubeconfig(&contents) {
+                    let name = if filename == "config" {
+                        "default".to_string()
                     } else {
-                        cleaned.to_string()
-                    }
-                };
+                        // Use filename without extension
+                        filename.to_string()
+                    };
 
-                let is_default = filename.to_lowercase() == "config";
+                    let is_default = filename.to_lowercase() == "config";
 
-                configs.push(KubeConfigFile {
-                    path: path.to_string_lossy().to_string(),
-                    name,
-                    is_default,
-                });
+                    configs.push(KubeConfigFile {
+                        path: path.to_string_lossy().to_string(),
+                        name,
+                        is_default,
+                    });
+                }
             }
         }
     }
@@ -116,6 +122,27 @@ fn scan_kube_configs() -> Result<Vec<KubeConfigFile>, String> {
     });
 
     Ok(configs)
+}
+
+/// Check if a file contents is a valid kubeconfig by looking for typical kubeconfig structure
+fn is_valid_kubeconfig(contents: &str) -> bool {
+    // Try to parse as YAML first
+    if let Ok(config) = serde_yaml::from_str::<serde_yaml::Value>(contents) {
+        // Check for kubeconfig-like structure
+        if let Some(kind) = config.get("kind") {
+            let kind_str = kind.as_str().unwrap_or("");
+            if kind_str == "Config" {
+                return true;
+            }
+        }
+
+        // Alternative check: has required fields like "contexts" or "clusters"
+        if config.get("contexts").is_some() || config.get("clusters").is_some() {
+            return true;
+        }
+    }
+
+    false
 }
 
 pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary, String> {
