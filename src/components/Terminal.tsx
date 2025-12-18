@@ -84,8 +84,11 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
 
     console.log(`[Terminal ${id}] Executing pending command:`, pendingCommand);
 
-    // Send command to terminal (add newline to execute)
-    terminalApi.write(terminalIdRef.current, pendingCommand + '\n').then(() => {
+    // Clear current line first with Ctrl+U, then send the command
+    // Using Ctrl+U alone to avoid Ctrl+C eating the first character
+    const clearAndExecute = '\x15' + pendingCommand + '\n';
+
+    terminalApi.write(terminalIdRef.current, clearAndExecute).then(() => {
       console.log(`[Terminal ${id}] Command sent successfully`);
       if (onCommandExecuted) {
         onCommandExecuted();
