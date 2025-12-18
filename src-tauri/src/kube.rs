@@ -2,6 +2,13 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+
+// Cache for available kubeconfig files to avoid rescanning on every context switch
+lazy_static! {
+    static ref AVAILABLE_CONFIGS: Mutex<Vec<KubeConfigFile>> = Mutex::new(Vec::new());
+}
 
 // Types matching the frontend's KubeTypes.ts
 
@@ -58,11 +65,22 @@ fn get_default_config_path() -> PathBuf {
 }
 
 fn scan_kube_configs() -> Result<Vec<KubeConfigFile>, String> {
+    // First check cache
+    let cached = AVAILABLE_CONFIGS.lock().map_err(|_| "Failed to lock cache")?;
+    if !cached.is_empty() {
+        return Ok(cached.clone());
+    }
+    drop(cached); // Release lock
+
+    // Not cached, scan directory
     let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
     let kube_dir = home_dir.join(".kube");
 
     // Check if ~/.kube directory exists
     if !kube_dir.exists() {
+        // Cache empty result
+        let mut cache = AVAILABLE_CONFIGS.lock().map_err(|_| "Failed to lock cache")?;
+        *cache = Vec::new();
         return Ok(vec![]);
     }
 
@@ -120,6 +138,10 @@ fn scan_kube_configs() -> Result<Vec<KubeConfigFile>, String> {
             a.name.cmp(&b.name)
         }
     });
+
+    // Cache the results
+    let mut cache = AVAILABLE_CONFIGS.lock().map_err(|_| "Failed to lock cache")?;
+    *cache = configs.clone();
 
     Ok(configs)
 }
