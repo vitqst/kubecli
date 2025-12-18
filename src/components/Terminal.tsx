@@ -233,6 +233,11 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         return false; // Let it bubble to global handler
       }
 
+      // Ctrl+K / Cmd+K - Kubectl Command Palette
+      if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+        return false; // Let it bubble to global handler
+      }
+
       // Ctrl+F / Cmd+F - Global Search
       if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
         return false; // Let it bubble to global handler
