@@ -10,6 +10,8 @@ import { ResourceCacheProvider } from './contexts/ResourceCacheContext';
 import { ErrorProvider } from './contexts/ErrorContext';
 import { ErrorBanner } from './components/ErrorBanner';
 import { CommandPalette } from './components/CommandPalette';
+import { KubectlPalette } from './components/KubectlPalette';
+import { addRecentCommand } from './commands/quickCommands';
 import { kube as kubeAPI, terminal as terminalAPI } from './api';
 
 type LoadState = 'idle' | 'loading' | 'error';
@@ -36,6 +38,7 @@ function App() {
   } | null>(null);
   const [isInEditMode, setIsInEditMode] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [isKubectlPaletteOpen, setIsKubectlPaletteOpen] = useState<boolean>(false);
   const [pendingCommand, setPendingCommand] = useState<string | null>(null);
 
   // Load namespaces for current context
@@ -66,13 +69,18 @@ function App() {
     }
   }, []);
 
-  // Keyboard shortcut: Ctrl+Shift+P to open command palette (VSCode style)
+  // Keyboard shortcuts: Ctrl+Shift+P for command palette, Ctrl+K for kubectl palette
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Shift+P or Cmd+Shift+P (Mac)
+      // Ctrl+Shift+P or Cmd+Shift+P (Mac) - Resource Command Palette
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
         e.preventDefault();
         setIsCommandPaletteOpen(true);
+      }
+      // Ctrl+K or Cmd+K - Kubectl Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsKubectlPaletteOpen(true);
       }
     };
 
@@ -236,6 +244,30 @@ function App() {
     setPromptDialog(null);
   }, []);
 
+  // Handle kubectl palette command execution
+  const handleKubectlCommand = useCallback((command: string) => {
+    // Extract command ID from the command for recent tracking
+    // This is a simple approach - match against known patterns
+    if (command.includes('get pods')) addRecentCommand('list-pods');
+    else if (command.includes('get deployments')) addRecentCommand('list-deployments');
+    else if (command.includes('get services')) addRecentCommand('list-services');
+    else if (command.includes('get secrets')) addRecentCommand('list-secrets');
+    else if (command.includes('get configmaps')) addRecentCommand('list-configmaps');
+    else if (command.includes('get ingresses')) addRecentCommand('list-ingresses');
+    else if (command.includes('get nodes')) addRecentCommand('get-nodes');
+    else if (command.includes('cluster-info')) addRecentCommand('cluster-info');
+    else if (command.includes('get namespaces')) addRecentCommand('get-namespaces');
+    else if (command.includes('get events')) addRecentCommand('view-events');
+    else if (command.includes('top pods')) addRecentCommand('top-pods');
+    else if (command.includes('top nodes')) addRecentCommand('top-nodes');
+
+    // Ensure terminal is visible and send command
+    if (!showTerminal) {
+      setShowTerminal(true);
+    }
+    setPendingCommand(command);
+  }, [showTerminal]);
+
   // Handle go home
   const handleGoHome = useCallback(() => {
     setShowTerminal(false);
@@ -328,6 +360,15 @@ function App() {
             isOpen={isCommandPaletteOpen}
             onClose={() => setIsCommandPaletteOpen(false)}
             onSelectResult={handleResourceAction}
+          />
+
+          {/* Kubectl Command Palette */}
+          <KubectlPalette
+            isOpen={isKubectlPaletteOpen}
+            onClose={() => setIsKubectlPaletteOpen(false)}
+            onExecute={handleKubectlCommand}
+            currentNamespace={selectedNamespace}
+            namespaces={namespaces}
           />
 
           {/* Action Prompt Dialog */}
