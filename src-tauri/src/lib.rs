@@ -1,5 +1,6 @@
 mod commands;
 mod kube;
+mod terminal;
 
 pub use commands::*;
 
@@ -11,6 +12,10 @@ pub fn run() {
             set_context,
             set_namespace,
             run_kubectl,
+            terminal_create,
+            terminal_write,
+            terminal_resize,
+            terminal_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
