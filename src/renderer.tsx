@@ -36,6 +36,7 @@ function App() {
   } | null>(null);
   const [isInEditMode, setIsInEditMode] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [pendingCommand, setPendingCommand] = useState<string | null>(null);
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
@@ -200,7 +201,6 @@ function App() {
   );
 
   // Execute action with prompt values
-  // TODO: Integrate with terminal component for command execution
   const executeAction = useCallback((actionId: string, context: ResourceActionContext, promptValues: Record<string, any>) => {
     const resource = getResourceDefinition(context.resourceType);
     if (!resource) return;
@@ -209,8 +209,18 @@ function App() {
     if (!action) return;
 
     const command = action.getCommand(context, promptValues);
-    console.log('[Action] Command to execute:', command);
-    // Terminal command execution will be handled by TerminalScreen component
+    console.log('[Action] Executing command:', command);
+
+    // Ensure terminal is visible and send command
+    if (!showTerminal) {
+      setShowTerminal(true);
+    }
+    setPendingCommand(command);
+  }, [showTerminal]);
+
+  // Handle command executed callback - clear pending command
+  const handleCommandExecuted = useCallback(() => {
+    setPendingCommand(null);
   }, []);
 
   // Handle prompt confirm
@@ -291,6 +301,8 @@ function App() {
           loadingNamespaces={loadingNamespaces}
           isInEditMode={isInEditMode}
           isConfigChanging={isConfigChanging}
+          pendingCommand={pendingCommand}
+          onCommandExecuted={handleCommandExecuted}
           onConfigChange={handleConfigChange}
           onContextChange={handleContextChange}
           onNamespaceChange={handleNamespaceChange}

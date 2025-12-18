@@ -66,6 +66,8 @@ interface TerminalScreenProps {
   loadingNamespaces: boolean;
   isInEditMode: boolean;
   isConfigChanging: boolean;
+  pendingCommand?: string | null;
+  onCommandExecuted?: () => void;
   onConfigChange: (path: string) => void;
   onContextChange: (context: string) => void;
   onNamespaceChange: (namespace: string) => void;
@@ -84,6 +86,8 @@ export function TerminalScreen({
   loadingNamespaces,
   isInEditMode,
   isConfigChanging,
+  pendingCommand,
+  onCommandExecuted,
   onConfigChange,
   onContextChange,
   onNamespaceChange,
@@ -136,10 +140,12 @@ export function TerminalScreen({
           onResourceAction={onResourceAction}
         />
         <div style={styles.terminalMain}>
-          <Terminal 
+          <Terminal
             id="main"
             env={terminalEnv}
             isLoading={isConfigChanging}
+            pendingCommand={pendingCommand}
+            onCommandExecuted={onCommandExecuted}
             onEditModeChange={onEditModeChange}
           />
         </div>
