@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import 'xterm/css/xterm.css';
+import { terminal as terminalApi } from '../api';
 
 interface TerminalProps {
   id: string;
@@ -19,54 +20,55 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [isReady, setIsReady] = useState(false);
   const isMountedRef = useRef(true);
+  const terminalIdRef = useRef<string | null>(null);
 
   // Handle environment changes without recreating terminal
   useEffect(() => {
-    if (!xtermRef.current || !env || !isReady) return;
-    
+    if (!xtermRef.current || !env || !isReady || !terminalIdRef.current) return;
+
     console.log(`[Terminal ${id}] Environment changed:`, env);
-    
+
     // Wait for loading overlay to appear and be fully visible
     // This prevents any flickering by doing all updates while overlay is shown
     setTimeout(() => {
-      if (!xtermRef.current || !isMountedRef.current) return;
-      
+      if (!xtermRef.current || !isMountedRef.current || !terminalIdRef.current) return;
+
       // Batch all terminal writes together to minimize redraws
       const commands: string[] = [];
       const messages: string[] = [];
-      
+
       // Update KUBECONFIG when config changes
       if (env.KUBECONFIG) {
         commands.push(`export KUBECONFIG=${env.KUBECONFIG}`);
         messages.push(`\x1b[36m✓ KUBECONFIG: ${env.KUBECONFIG}\x1b[0m`);
       }
-      
+
       // Export namespace as environment variable (no alias needed - helpers handle it)
       if (env.KUBECTL_NAMESPACE) {
         const namespace = env.KUBECTL_NAMESPACE;
         commands.push(`export KUBECTL_NAMESPACE=${namespace}`);
-        
+
         messages.push(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
       }
-      
+
       // Clear and write everything in one operation to prevent double blink
       xtermRef.current.clear();
-      
+
       // Write all messages at once
       messages.forEach(msg => {
         if (xtermRef.current) {
           xtermRef.current.writeln(msg);
         }
       });
-      
+
       if (xtermRef.current) {
         xtermRef.current.writeln('');
       }
-      
+
       // Send all commands at once to the shell (after visual update)
-      if (commands.length > 0 && window.terminal) {
+      if (commands.length > 0 && terminalIdRef.current) {
         const batchCommand = commands.join('\n') + '\n';
-        window.terminal.write(id, batchCommand).catch((err) => {
+        terminalApi.write(terminalIdRef.current, batchCommand).catch((err) => {
           console.error('Failed to update environment:', err);
         });
       }
@@ -75,9 +77,9 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
 
   useEffect(() => {
     isMountedRef.current = true;
-    
-    if (!terminalRef.current || !window.terminal) {
-      console.error('[Terminal] Terminal ref or API not available');
+
+    if (!terminalRef.current) {
+      console.error('[Terminal] Terminal ref not available');
       return;
     }
 
@@ -122,9 +124,9 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
       console.error(`[Terminal ${id}] Container ref is null`);
       return;
     }
-    
+
     xterm.open(terminalRef.current);
-    
+
     // Wait a tick for DOM to be ready before fitting
     setTimeout(() => {
       try {
@@ -137,31 +139,36 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
+    // Store cleanup functions for async listeners
+    let unlistenData: (() => void) | null = null;
+    let unlistenExit: (() => void) | null = null;
+
     // Create backend terminal
-    window.terminal
-      .create(id, { cwd, env })
-      .then(() => {
-        console.log(`[Terminal ${id}] Created successfully`);
+    terminalApi
+      .create()
+      .then((termId) => {
+        console.log(`[Terminal ${id}] Created successfully with backend ID: ${termId}`);
+        terminalIdRef.current = termId;
         setIsReady(true);
-        
+
         // Show namespace info (no alias needed - helpers handle namespace)
         if (env?.KUBECTL_NAMESPACE) {
           const namespace = env.KUBECTL_NAMESPACE;
           xterm.writeln(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
           xterm.writeln('');
         }
-        
+
         if (onReady) onReady();
       })
       .catch((error) => {
         console.error(`[Terminal ${id}] Failed to create:`, error);
-        xterm.writeln(`\x1b[31mFailed to create terminal: ${error.message}\x1b[0m`);
+        xterm.writeln(`\x1b[31mFailed to create terminal: ${error}\x1b[0m`);
       });
 
     // Handle user input
     xterm.onData((data) => {
-      if (window.terminal && isMountedRef.current) {
-        window.terminal.write(id, data).catch((error) => {
+      if (terminalIdRef.current && isMountedRef.current) {
+        terminalApi.write(terminalIdRef.current, data).catch((error) => {
           console.error(`[Terminal ${id}] Failed to write:`, error);
         });
       }
@@ -174,12 +181,12 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'P') {
         return false; // Let it bubble to global handler
       }
-      
+
       // Ctrl+F / Cmd+F - Global Search
       if ((event.ctrlKey || event.metaKey) && event.key === 'f') {
         return false; // Let it bubble to global handler
       }
-      
+
       // Ctrl+C or Cmd+C - Copy when text is selected
       if ((event.ctrlKey || event.metaKey) && event.key === 'c') {
         const selection = xterm.getSelection();
@@ -190,29 +197,29 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
         // If no selection, let Ctrl+C send SIGINT to terminal
         return true;
       }
-      
+
       // Ctrl+V or Cmd+V - Paste
       if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
         event.preventDefault();
         navigator.clipboard.readText().then((text) => {
-          if (window.terminal && isMountedRef.current) {
-            window.terminal.write(id, text);
+          if (terminalIdRef.current && isMountedRef.current) {
+            terminalApi.write(terminalIdRef.current, text);
           }
         }).catch((err) => {
           console.error('Failed to read clipboard:', err);
         });
         return false;
       }
-      
+
       return true; // Allow other keys
     });
 
     // Handle right-click context menu for copy/paste
-    terminalRef.current.addEventListener('contextmenu', (e) => {
+    const contextMenuHandler = (e: MouseEvent) => {
       e.preventDefault();
-      
+
       const selection = xterm.getSelection();
-      
+
       // Create context menu
       const menu = document.createElement('div');
       menu.style.position = 'fixed';
@@ -225,7 +232,7 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
       menu.style.zIndex = '10000';
       menu.style.minWidth = '150px';
       menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-      
+
       // Copy option (only if text is selected)
       if (selection) {
         const copyItem = document.createElement('div');
@@ -242,7 +249,7 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
         };
         menu.appendChild(copyItem);
       }
-      
+
       // Paste option
       const pasteItem = document.createElement('div');
       pasteItem.textContent = 'Paste';
@@ -255,8 +262,8 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
       pasteItem.onclick = async () => {
         try {
           const text = await navigator.clipboard.readText();
-          if (window.terminal && isMountedRef.current) {
-            window.terminal.write(id, text);
+          if (terminalIdRef.current && isMountedRef.current) {
+            terminalApi.write(terminalIdRef.current, text);
           }
         } catch (err) {
           console.error('Failed to read clipboard:', err);
@@ -264,7 +271,7 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
         document.body.removeChild(menu);
       };
       menu.appendChild(pasteItem);
-      
+
       // Clear selection option (only if text is selected)
       if (selection) {
         const clearItem = document.createElement('div');
@@ -281,9 +288,9 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
         };
         menu.appendChild(clearItem);
       }
-      
+
       document.body.appendChild(menu);
-      
+
       // Close menu on click outside
       const closeMenu = (event: MouseEvent) => {
         if (!menu.contains(event.target as Node)) {
@@ -294,77 +301,67 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
         }
       };
       setTimeout(() => document.addEventListener('click', closeMenu), 0);
+    };
+
+    terminalRef.current.addEventListener('contextmenu', contextMenuHandler);
+
+    // Handle data from backend - display in terminal (Tauri event listener)
+    terminalApi.onData((payload) => {
+      if (payload.terminalId === terminalIdRef.current && xtermRef.current && isMountedRef.current) {
+        xtermRef.current.write(payload.data);
+      }
+    }).then((unlisten) => {
+      unlistenData = unlisten;
     });
 
-    // Handle data from backend - display in terminal
-    const dataHandler = (termId: string, data: string) => {
-      if (termId === id && xtermRef.current && isMountedRef.current) {
-        xtermRef.current.write(data);
-      }
-    };
-    
-    const cleanupDataHandler = window.terminal.onData(dataHandler);
-
-    // Handle terminal exit
-    const exitHandler = (termId: string, exitCode: number, signal?: number) => {
-      if (termId === id) {
-        console.log(`[Terminal ${id}] Exited with code ${exitCode}, signal ${signal}`);
+    // Handle terminal exit (Tauri event listener)
+    terminalApi.onExit((termId) => {
+      if (termId === terminalIdRef.current) {
+        console.log(`[Terminal ${id}] Exited`);
         if (xtermRef.current) {
-          xtermRef.current.writeln(`\r\n\x1b[33mTerminal exited with code ${exitCode}\x1b[0m`);
+          xtermRef.current.writeln(`\r\n\x1b[33mTerminal exited\x1b[0m`);
         }
-        if (onExit) onExit(exitCode, signal);
+        if (onExit) onExit(0);
       }
-    };
-    
-    const cleanupExitHandler = window.terminal.onExit(exitHandler);
-
-    // Handle edit mode changes
-    const editModeHandler = (termId: string, isEditMode: boolean) => {
-      if (termId === id) {
-        console.log(`[Terminal ${id}] Edit mode changed: ${isEditMode}`);
-        if (onEditModeChange) {
-          onEditModeChange(isEditMode);
-        }
-      }
-    };
-    
-    const cleanupEditModeHandler = window.terminal.onEditMode(editModeHandler);
+    }).then((unlisten) => {
+      unlistenExit = unlisten;
+    });
 
     // Handle window resize - make terminal grow with window
     const handleResize = () => {
       // Early return if component is unmounted
       if (!isMountedRef.current) return;
-      
+
       // Check all refs are still valid
       const fitAddon = fitAddonRef.current;
       const xterm = xtermRef.current;
-      
-      if (!fitAddon || !xterm || !window.terminal) return;
-      
+
+      if (!fitAddon || !xterm || !terminalIdRef.current) return;
+
       try {
         // Check if terminal is disposed - element becomes null after dispose()
         const element = xterm.element;
         if (!element) {
           return;
         }
-        
+
         // Check if terminal element is visible and has dimensions
         if (element.clientWidth === 0 || element.clientHeight === 0) {
           return;
         }
-        
+
         // Check if terminal has buffer (disposed terminals don't have buffer)
         if (!xterm.buffer || !xterm.buffer.active) {
           return;
         }
-        
+
         // Fit terminal to container
         fitAddon.fit();
-        
+
         // Get dimensions after fit
         const { cols, rows } = xterm;
-        if (cols && rows && cols > 0 && rows > 0) {
-          window.terminal.resize(id, cols, rows).catch((error) => {
+        if (cols && rows && cols > 0 && rows > 0 && terminalIdRef.current) {
+          terminalApi.resize(terminalIdRef.current, cols, rows).catch((error) => {
             // Ignore resize errors - terminal may have closed
             console.debug(`[Terminal ${id}] Resize backend failed:`, error);
           });
@@ -389,7 +386,7 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
         }
       }
     });
-    
+
     if (terminalRef.current) {
       resizeObserver.observe(terminalRef.current);
     }
@@ -398,29 +395,28 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
     return () => {
       console.log(`[Terminal ${id}] Cleaning up...`);
       isMountedRef.current = false;
-      
+
       // Remove event listeners first
       window.removeEventListener('resize', handleResize);
-      
+
       // Disconnect resize observer
       try {
         resizeObserver.disconnect();
       } catch (error) {
         console.debug(`[Terminal ${id}] ResizeObserver disconnect error:`, error);
       }
-      
-      // Cleanup event listeners
-      if (cleanupDataHandler) cleanupDataHandler();
-      if (cleanupExitHandler) cleanupExitHandler();
-      if (cleanupEditModeHandler) cleanupEditModeHandler();
-      
+
+      // Cleanup Tauri event listeners
+      if (unlistenData) unlistenData();
+      if (unlistenExit) unlistenExit();
+
       // Close backend terminal
-      if (window.terminal) {
-        window.terminal.close(id).catch((error) => {
+      if (terminalIdRef.current) {
+        terminalApi.close(terminalIdRef.current).catch((error) => {
           console.error(`[Terminal ${id}] Failed to close:`, error);
         });
       }
-      
+
       // Dispose fit addon first (before terminal)
       if (fitAddonRef.current) {
         try {
@@ -430,7 +426,7 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
         }
         fitAddonRef.current = null;
       }
-      
+
       // Dispose terminal last
       if (xtermRef.current) {
         try {
@@ -445,14 +441,14 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
 
   // Separate effect for initial resize after terminal is ready
   useEffect(() => {
-    if (isReady && isMountedRef.current && fitAddonRef.current && xtermRef.current) {
+    if (isReady && isMountedRef.current && fitAddonRef.current && xtermRef.current && terminalIdRef.current) {
       setTimeout(() => {
-        if (isMountedRef.current && fitAddonRef.current) {
+        if (isMountedRef.current && fitAddonRef.current && terminalIdRef.current) {
           try {
             fitAddonRef.current.fit();
             const { cols, rows } = xtermRef.current!;
-            if (cols && rows && cols > 0 && rows > 0 && window.terminal) {
-              window.terminal.resize(id, cols, rows).catch((error) => {
+            if (cols && rows && cols > 0 && rows > 0 && terminalIdRef.current) {
+              terminalApi.resize(terminalIdRef.current, cols, rows).catch((error) => {
                 console.error(`[Terminal ${id}] Failed to resize:`, error);
               });
             }
