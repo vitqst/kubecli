@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with this repository.
 
 ## Project Overview
 
-KubeCLI is a desktop Electron application for managing Kubernetes contexts and running kubectl commands with an intuitive UI. It features kubeconfig file switching, context management, namespace selection, a command palette (Ctrl+Shift+P), and an embedded terminal with xterm.js.
+KubeCLI is a desktop Tauri application for managing Kubernetes contexts and running kubectl commands with an intuitive UI. It features kubeconfig file switching, context management, namespace selection, a command palette (Ctrl+Shift+P), and an embedded terminal with xterm.js.
 
 ## Development Commands
 
@@ -13,54 +13,48 @@ KubeCLI is a desktop Electron application for managing Kubernetes contexts and r
 npm install
 
 # Start development server with hot reload
-make dev    # or: npm start
+npm run dev
 
 # Type checking
-make typecheck    # or: npx tsc --noEmit
+npx tsc --noEmit
 
-# Package for distribution
-npm run package
-
-# Create installers
-npm run make
-
-# Clean build artifacts
-make clean
+# Build for production
+npm run build
 ```
 
 ## Architecture
 
-### Process Model (Electron)
+### Process Model (Tauri)
 
-- **Main Process** (`src/main.ts`): Manages window lifecycle and registers IPC handlers for kubernetes and terminal operations
-- **Preload Bridge** (`src/preload.ts`): Exposes `window.kube` and `window.terminal` APIs to renderer via contextBridge
-- **Renderer Process** (`src/renderer.tsx`): React UI with hooks for state management
+- **Rust Backend** (`src-tauri/`): Handles PTY terminal, kubeconfig operations via Tauri commands
+- **Frontend** (`src/`): React UI with Vite bundler
+- **IPC**: Frontend communicates with backend via `@tauri-apps/api` invoke calls
 
-### Key IPC Channels
+### Key Tauri Commands
 
-Kubernetes operations (`window.kube`):
-- `kube:get-contexts` - Load kubeconfig summary
-- `kube:set-context` - Switch active context
-- `kube:set-config` - Switch kubeconfig file
-- `kube:run-command` - Execute kubectl commands
+Kubernetes operations (`src/api/kube.ts`):
+- `get_contexts` - Load kubeconfig summary
+- `set_context` - Switch active context
+- `set_config` - Switch kubeconfig file
+- `get_namespaces` - List namespaces for context
 
-Terminal operations (`window.terminal`):
-- `terminal:create/write/resize/close` - PTY management via node-pty
-- `terminal:data/exit/edit-mode` - Events from main to renderer
+Terminal operations (`src/api/terminal.ts`):
+- `terminal_create` - Create PTY session
+- `terminal_write` - Send input to PTY
+- `terminal_resize` - Resize PTY dimensions
+- `terminal_close` - Close PTY session
 
 ### Source Structure
 
 ```
 src/
-├── main.ts              # Electron main process, IPC handlers
-├── preload.ts           # Secure IPC bridge (window.kube, window.terminal)
 ├── renderer.tsx         # Root React component with screen routing
-├── main/
-│   ├── kube.ts          # Kubeconfig parsing, kubectl execution
-│   └── terminal.ts      # PTY terminal manager (node-pty)
+├── api/                 # Tauri API wrappers
+│   ├── index.ts         # API exports
+│   ├── kube.ts          # Kubernetes operations
+│   └── terminal.ts      # Terminal operations
 ├── common/
-│   ├── kubeTypes.ts     # Shared TypeScript interfaces
-│   └── resourceActions.ts
+│   └── kubeTypes.ts     # Shared TypeScript interfaces
 ├── resources/           # Resource action definitions
 │   ├── types.ts         # ResourceDefinition, ResourceAction interfaces
 │   ├── index.ts         # Resource registry
@@ -78,6 +72,16 @@ src/
 │   └── CommandPalette.tsx  # Ctrl+Shift+P command palette
 └── hooks/
     └── useResourceCache.ts
+
+src-tauri/
+├── src/
+│   ├── main.rs          # Tauri app entry point
+│   ├── lib.rs           # Tauri command registration
+│   ├── commands.rs      # Tauri command handlers
+│   ├── kube.rs          # Kubeconfig parsing, kubectl execution
+│   └── terminal.rs      # PTY terminal manager (portable-pty)
+├── Cargo.toml           # Rust dependencies
+└── tauri.conf.json      # Tauri configuration
 ```
 
 ### Resource System
@@ -91,16 +95,10 @@ Each resource defines:
 - Optional `prompts` for user input dialogs
 - `isFavorite` flag for quick-access buttons vs context menu
 
-### Caching Strategy
-
-`ResourceCacheContext` implements per-resource-type caching:
-- Pods/Jobs: 1 hour TTL (frequently changing)
-- Deployments/Services/CronJobs: Never expire (stable)
-- Cache key: `${kubeconfigPath}::${context}::${resourceType}`
-
 ## Tech Stack
 
-- Electron 28 with Webpack
-- React 19 with TypeScript (strict mode)
-- xterm.js + node-pty for terminal
+- Tauri 2.x with Rust backend
+- React 19 with TypeScript
+- Vite for frontend bundling
+- xterm.js + portable-pty for terminal
 - YAML library for kubeconfig parsing
