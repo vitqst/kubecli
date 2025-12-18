@@ -10,18 +10,9 @@ import { ResourceCacheProvider } from './contexts/ResourceCacheContext';
 import { ErrorProvider } from './contexts/ErrorContext';
 import { ErrorBanner } from './components/ErrorBanner';
 import { CommandPalette } from './components/CommandPalette';
-
-// Fix for webpack asset relocator __dirname issue in renderer
-declare global {
-  var __dirname: string;
-}
-if (typeof __dirname === 'undefined') {
-  (globalThis as any).__dirname = '';
-}
+import { kube as kubeAPI, terminal as terminalAPI } from './api';
 
 type LoadState = 'idle' | 'loading' | 'error';
-
-const kubeAPI = window.kube;
 
 function App() {
   console.log('[App] Component rendering...');
@@ -48,8 +39,8 @@ function App() {
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
-    if (!contextName || !kubeAPI) return;
-    
+    if (!contextName) return;
+
     setLoadingNamespaces(true);
     try {
       const result = await kubeAPI.runCommand(contextName, 'get namespaces -o jsonpath={.items[*].metadata.name}');
@@ -90,8 +81,6 @@ function App() {
 
   // Load initial contexts
   useEffect(() => {
-    if (!kubeAPI) return;
-    
     kubeAPI.getContexts().then((summary: KubeConfigSummary) => {
       setContexts(summary.contexts);
       setSelectedContext(summary.currentContext || '');
@@ -108,8 +97,6 @@ function App() {
 
   // Handle config change
   const handleConfigChange = useCallback((newConfigPath: string) => {
-    if (!kubeAPI) return;
-    
     setIsConfigChanging(true);
     kubeAPI.setConfig(newConfigPath).then((summary: KubeConfigSummary) => {
       setContexts(summary.contexts);
@@ -130,8 +117,6 @@ function App() {
 
   // Handle context change
   const handleContextChange = useCallback((newContext: string) => {
-    if (!kubeAPI) return;
-    
     setIsConfigChanging(true);
     kubeAPI.setContext(newContext).then((summary: KubeConfigSummary) => {
       setSelectedContext(summary.currentContext || '');
@@ -167,8 +152,8 @@ function App() {
   // Handle resource action
   const handleResourceAction = useCallback(
     (actionId: string, resourceType: ResourceType, resourceName: string, customNamespace?: string) => {
-      if (!window.terminal || !selectedNamespace) return;
-      
+      if (!selectedNamespace) return;
+
       if (isInEditMode) {
         console.warn('Cannot execute action while terminal is in edit mode');
         return;
@@ -215,9 +200,8 @@ function App() {
   );
 
   // Execute action with prompt values
+  // TODO: Integrate with terminal component for command execution
   const executeAction = useCallback((actionId: string, context: ResourceActionContext, promptValues: Record<string, any>) => {
-    if (!window.terminal) return;
-
     const resource = getResourceDefinition(context.resourceType);
     if (!resource) return;
 
@@ -225,7 +209,8 @@ function App() {
     if (!action) return;
 
     const command = action.getCommand(context, promptValues);
-    window.terminal.write('main', command);
+    console.log('[Action] Command to execute:', command);
+    // Terminal command execution will be handled by TerminalScreen component
   }, []);
 
   // Handle prompt confirm

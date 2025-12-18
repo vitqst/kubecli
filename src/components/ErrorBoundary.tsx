@@ -34,13 +34,11 @@ export class ErrorBoundary extends Component<Props, State> {
     });
 
     // Send error to main process for logging
-    if (window.kube) {
-      console.error('[ErrorBoundary] Full error details:', {
-        message: error.message,
-        stack: error.stack,
-        componentStack: errorInfo.componentStack,
-      });
-    }
+    console.error('[ErrorBoundary] Full error details:', {
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   render(): ReactNode {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ResourceType } from '../resources';
+import { kube } from '../api';
 
 export interface CachedResource {
   type: ResourceType;
@@ -32,7 +33,7 @@ export function useResourceCache(selectedContext: string) {
 
   // Fetch all resources
   const fetchResources = useCallback(async () => {
-    if (!selectedContext || !window.kube) return;
+    if (!selectedContext) return;
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
@@ -40,7 +41,7 @@ export function useResourceCache(selectedContext: string) {
       const allResources: CachedResource[] = [];
 
       // Fetch pods from all namespaces
-      const podsResult = await window.kube.runCommand(
+      const podsResult = await kube.runCommand(
         selectedContext,
         'get pods -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount'
       );
@@ -67,7 +68,7 @@ export function useResourceCache(selectedContext: string) {
       }
 
       // Fetch deployments from all namespaces
-      const deploymentsResult = await window.kube.runCommand(
+      const deploymentsResult = await kube.runCommand(
         selectedContext,
         'get deployments -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas'
       );
@@ -90,7 +91,7 @@ export function useResourceCache(selectedContext: string) {
       }
 
       // Fetch cronjobs from all namespaces
-      const cronjobsResult = await window.kube.runCommand(
+      const cronjobsResult = await kube.runCommand(
         selectedContext,
         'get cronjobs -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,SCHEDULE:.spec.schedule,SUSPEND:.spec.suspend'
       );
@@ -114,7 +115,7 @@ export function useResourceCache(selectedContext: string) {
       }
 
       // Fetch services from all namespaces
-      const servicesResult = await window.kube.runCommand(
+      const servicesResult = await kube.runCommand(
         selectedContext,
         'get services -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.spec.type,CLUSTER-IP:.spec.clusterIP'
       );
