@@ -73,7 +73,7 @@ export function ContextMenu({
           key={action.id}
           style={styles.contextMenuItem}
           onClick={() => {
-            onAction(action.id, resourceType, resourceName, customNamespace);
+            onAction(action.id, resourceType, resourceName, customNamespace || namespace);
             onClose();
           }}
           onMouseEnter={(e) => {

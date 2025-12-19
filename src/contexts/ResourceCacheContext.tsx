@@ -20,6 +20,7 @@ interface ResourceCacheContextType {
   search: (query: string) => CachedResource[];
   filterByType: (type: ResourceType) => CachedResource[];
   filterByNamespace: (namespace: string) => CachedResource[];
+  filterByNamespaces: (namespaces?: string[], type?: ResourceType) => CachedResource[];
   getCountByType: (type: ResourceType) => number;
   refresh: () => void;
   refreshType: (type: ResourceType) => void;
@@ -68,7 +69,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Try to get error context, but don't fail if not available
   let addError: ((error: any) => void) | undefined;
   try {
@@ -238,7 +239,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
       }
 
       const now = new Date();
-      
+
       // Save each resource type separately with expiry
       const resourcesByType = new Map<ResourceType, CachedResource[]>();
       allResources.forEach(resource => {
@@ -253,16 +254,16 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         const ttl = CACHE_TTL[type];
         const expiresAt = ttl === Infinity ? null as any : new Date(now.getTime() + ttl);
         const typedCacheKey = `${cacheKey}::${type}`;
-        
+
         cacheStorage.set(typedCacheKey, {
           resources,
           lastUpdated: now,
           expiresAt,
         });
-        
+
         console.log(`[ResourceCache] Cached ${resources.length} ${type}s for ${cacheKey} (expires: ${ttl === Infinity ? 'never' : expiresAt.toLocaleTimeString()})`);
       });
-      
+
       setResources(allResources);
       setLastUpdated(now);
       console.log(`[ResourceCache] Cached ${allResources.length} total resources for ${cacheKey}`);
@@ -270,7 +271,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch resources';
       console.error('[ResourceCache] Failed to fetch resources:', err);
       setError(errorMessage);
-      
+
       // Show user-friendly error banner if error context is available
       if (addError) {
         addError({
@@ -348,24 +349,24 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     if (!query.trim()) return [];
 
     const lowerQuery = query.toLowerCase();
-    
+
     // Check for type filter syntax: "type:query" or "type: query"
     const typeFilterMatch = lowerQuery.match(/^(\w+):\s*(.*)$/);
-    
+
     if (typeFilterMatch) {
       const [, typeFilter, nameQuery] = typeFilterMatch;
-      
+
       // Filter by type first, then by name
       return resources.filter(resource => {
         const typeMatches = resource.type.toLowerCase().includes(typeFilter);
-        const nameMatches = nameQuery 
+        const nameMatches = nameQuery
           ? resource.name.toLowerCase().includes(nameQuery) ||
             resource.namespace.toLowerCase().includes(nameQuery)
           : true;
         return typeMatches && nameMatches;
       }).slice(0, 20);
     }
-    
+
     // Default search: search in name, namespace, and type
     return resources.filter(resource =>
       resource.name.toLowerCase().includes(lowerQuery) ||
@@ -382,6 +383,18 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   // Filter by namespace
   const filterByNamespace = useCallback((namespace: string): CachedResource[] => {
     return resources.filter(resource => resource.namespace === namespace);
+  }, [resources]);
+
+  // Filter by multiple namespaces (empty list = all)
+  const filterByNamespaces = useCallback((namespaces: string[] = [], type?: ResourceType): CachedResource[] => {
+    if (!namespaces.length) {
+      return type ? resources.filter(resource => resource.type === type) : resources;
+    }
+
+    const namespaceSet = new Set(namespaces);
+    return resources.filter(resource =>
+      namespaceSet.has(resource.namespace) && (!type || resource.type === type)
+    );
   }, [resources]);
 
   // Get resource count by type
@@ -407,6 +420,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     search,
     filterByType,
     filterByNamespace,
+    filterByNamespaces,
     getCountByType,
     refresh: fetchResources,
     refreshType,

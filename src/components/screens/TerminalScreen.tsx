@@ -268,7 +268,7 @@ export function TerminalScreen({
             <ResourcePanel
               isOpen={isPanelOpen}
               selectedResourceType={selectedResourceType}
-              namespace={selectedNamespace}
+              namespaces={namespaces}
               onAction={handleResourceAction}
               onShowContextMenu={handleShowContextMenu}
               onClose={closePanel}
