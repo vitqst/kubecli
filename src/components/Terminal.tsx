@@ -209,7 +209,7 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
           if (env?.KUBECTL_NAMESPACE) {
             const namespace = env.KUBECTL_NAMESPACE;
             xterm.writeln(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
-            xterm.writeln('');
+            // xterm.writeln('');
           }
 
           if (onReady) onReady();
@@ -217,7 +217,7 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
       })
       .catch((error) => {
         console.error(`[Terminal ${id}] Failed to create:`, error);
-        xterm.writeln(`\x1b[31mFailed to create terminal: ${error}\x1b[0m`);
+        // xterm.writeln(`\x1b[31mFailed to create terminal: ${error}\x1b[0m`);
       });
 
     // Handle user input
