@@ -41,6 +41,8 @@ export function ContextMenu({
     resourceType,
   });
 
+  const combinedActions = [...favorites.map(a => ({ ...a, isFavorite: true })), ...actions.map(a => ({ ...a, isFavorite: false }))];
+
   const margin = 8;
   const estimatedHeight = 320; // approximate to keep menu onscreen
   const menuWidth = 240;
@@ -63,36 +65,10 @@ export function ContextMenu({
         </div>
       </div>
 
-      <div style={styles.contextMenuSectionTitle}>Quick actions</div>
-      {favorites.length === 0 && (
-        <div style={styles.contextMenuEmpty}>No quick actions</div>
+      {combinedActions.length === 0 && (
+        <div style={styles.contextMenuEmpty}>No actions</div>
       )}
-      {favorites.map((action) => (
-        <div
-          key={`fav-${action.id}`}
-          style={styles.contextMenuItem}
-          onClick={() => {
-            onAction(action.id, resourceType, resourceName, customNamespace);
-            onClose();
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#094771';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }}
-        >
-          <span style={styles.contextMenuIcon}>{action.icon}</span>
-          <span style={styles.contextMenuLabel}>{action.label}</span>
-        </div>
-      ))}
-
-      <div style={styles.contextMenuDivider} />
-      <div style={styles.contextMenuSectionTitle}>More actions</div>
-      {actions.length === 0 && (
-        <div style={styles.contextMenuEmpty}>No additional actions</div>
-      )}
-      {actions.map((action) => (
+      {combinedActions.map((action) => (
         <div
           key={action.id}
           style={styles.contextMenuItem}
@@ -107,7 +83,7 @@ export function ContextMenu({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <span style={styles.contextMenuIcon}>{action.icon}</span>
+          <span style={styles.contextMenuIcon}>{action.isFavorite ? '★' : action.icon}</span>
           <span style={styles.contextMenuLabel}>{action.label}</span>
         </div>
       ))}
