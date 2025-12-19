@@ -191,6 +191,39 @@ export function TerminalScreen({
     console.log('Context menu requested for', resourceType, resourceName);
   }, []);
 
+  // Keyboard shortcuts for tab navigation
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Tab - cycle to next tab
+      // Ctrl+Shift+Tab - cycle to previous tab
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+        const currentIndex = tabs.findIndex(t => t.id === activeTabId);
+        const nextIndex = e.shiftKey
+          ? (currentIndex - 1 + tabs.length) % tabs.length
+          : (currentIndex + 1) % tabs.length;
+        setActiveTab(tabs[nextIndex].id);
+      }
+
+      // Ctrl+W - close current tab (except default)
+      if (e.ctrlKey && e.key === 'w') {
+        e.preventDefault();
+        if (activeTabId !== 'default') {
+          closeTab(activeTabId);
+        }
+      }
+
+      // Ctrl+T - open new blank terminal tab
+      if (e.ctrlKey && e.key === 't') {
+        e.preventDefault();
+        handleAddTab();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [tabs, activeTabId, setActiveTab, closeTab, handleAddTab]);
+
   return (
     <>
       {/* Terminal Top Bar */}
