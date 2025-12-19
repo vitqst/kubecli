@@ -194,9 +194,11 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
       unlistenExit = unlisten;
     });
 
-    // Create backend terminal
+    // Create backend terminal with initial environment variables
+    // This sets KUBECONFIG and KUBECTL_NAMESPACE BEFORE the shell starts,
+    // so the user never sees any export commands
     terminalApi
-      .create()
+      .create(undefined, env)
       .then((termId) => {
         console.log(`[Terminal ${id}] Created successfully with backend ID: ${termId}`);
         terminalIdRef.current = termId;
@@ -204,14 +206,6 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         // Wait for backend initialization to complete
         setTimeout(() => {
           setIsReady(true);
-
-          // Show namespace info (no alias needed - helpers handle namespace)
-          if (env?.KUBECTL_NAMESPACE) {
-            const namespace = env.KUBECTL_NAMESPACE;
-            xterm.writeln(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
-            // xterm.writeln('');
-          }
-
           if (onReady) onReady();
         }, 300);
       })

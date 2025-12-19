@@ -7,8 +7,8 @@ export interface TerminalDataPayload {
 }
 
 export const terminal = {
-  create: (shell?: string): Promise<string> =>
-    invoke<string>('terminal_create', { shell: shell ?? null }),
+  create: (shell?: string, initialEnv?: Record<string, string>): Promise<string> =>
+    invoke<string>('terminal_create', { shell: shell ?? null, initialEnv: initialEnv ?? null }),
 
   write: (terminalId: string, data: string): Promise<void> =>
     invoke('terminal_write', { terminalId, data }),

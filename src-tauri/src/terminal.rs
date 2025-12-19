@@ -24,7 +24,7 @@ impl TerminalManager {
         }
     }
 
-    pub fn create(&mut self, app: AppHandle, shell: Option<String>) -> Result<String, String> {
+    pub fn create(&mut self, app: AppHandle, shell: Option<String>, initial_env: Option<std::collections::HashMap<String, String>>) -> Result<String, String> {
         let pty_system = native_pty_system();
 
         let pair = pty_system
@@ -68,6 +68,13 @@ impl TerminalManager {
         // Set a clean LANG/LC_ALL for proper character handling
         cmd.env("LANG", "en_US.UTF-8");
         cmd.env("LC_ALL", "en_US.UTF-8");
+
+        // Set initial environment variables passed from frontend (e.g., KUBECONFIG, KUBECTL_NAMESPACE)
+        if let Some(env_vars) = initial_env {
+            for (key, value) in env_vars {
+                cmd.env(&key, &value);
+            }
+        }
 
         pair.slave
             .spawn_command(cmd)

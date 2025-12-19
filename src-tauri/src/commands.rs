@@ -42,10 +42,10 @@ pub async fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Resu
 }
 
 #[tauri::command]
-pub fn terminal_create(app: AppHandle, shell: Option<String>) -> Result<String, String> {
+pub fn terminal_create(app: AppHandle, shell: Option<String>, initial_env: Option<std::collections::HashMap<String, String>>) -> Result<String, String> {
     let mut manager = TERMINAL_MANAGER.lock()
         .map_err(|_| "Failed to lock terminal manager".to_string())?;
-    manager.create(app, shell)
+    manager.create(app, shell, initial_env)
 }
 
 #[tauri::command]
