@@ -118,16 +118,28 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   const fetchResources = useCallback(async () => {
     if (!selectedContext) return;
 
+    console.log(`[ResourceCache] ${new Date().toISOString()} Starting parallel fetch for ${cacheKey}`);
     setError(null);
 
-    console.log(`[ResourceCache] ${new Date().toISOString()} Starting parallel fetch for ${cacheKey}`);
+    // Reset all to loading
+    setLoadingStates({
+      pod: { status: 'loading' },
+      deployment: { status: 'loading' },
+      cronjob: { status: 'loading' },
+      service: { status: 'loading' },
+      configmap: { status: 'loading' },
+      secret: { status: 'loading' },
+      job: { status: 'loading' },
+      statefulset: { status: 'loading' },
+      daemonset: { status: 'loading' },
+      ingress: { status: 'loading' },
+    });
 
     /**
      * Helper to extract a value from an object using a JSON path like '.metadata.name'
      */
     const getValueByPath = (obj: any, path: string): any => {
       if (!path || !obj) return undefined;
-      // Remove leading dot
       const cleanPath = path.startsWith('.') ? path.slice(1) : path;
       const parts = cleanPath.split('.');
       let value = obj;
@@ -206,44 +218,61 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
       return results;
     };
 
+    /**
+     * Fetch a single resource type and update its loading state
+     */
+    const fetchOne = async (type: ResourceType, command: string): Promise<CachedResource[]> => {
+      const start = Date.now();
+      try {
+        const result = await kube.runCommand(selectedContext, command);
+        const duration = Date.now() - start;
+
+        if (result.code === 0 && result.stdout) {
+          const resources = processJsonOutput(result.stdout, type);
+          setLoadingStates(prev => ({
+            ...prev,
+            [type]: { status: 'success', count: resources.length, duration }
+          }));
+          console.log(`[ResourceCache] ✓ ${type}: ${resources.length} items (${duration}ms)`);
+          return resources;
+        } else {
+          const errorMsg = result.stderr || 'Unknown error';
+          setLoadingStates(prev => ({
+            ...prev,
+            [type]: { status: 'error', error: errorMsg, duration }
+          }));
+          console.error(`[ResourceCache] ✗ ${type}: ${errorMsg}`);
+          return [];
+        }
+      } catch (err) {
+        const duration = Date.now() - start;
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        setLoadingStates(prev => ({
+          ...prev,
+          [type]: { status: 'error', error: errorMsg, duration }
+        }));
+        console.error(`[ResourceCache] ✗ ${type}: ${errorMsg}`);
+        return [];
+      }
+    };
+
     try {
-      // Run ALL kubectl commands in PARALLEL using JSON output
-      const [podsResult, deploymentsResult, cronjobsResult, servicesResult, configMapsResult, secretsResult] = await Promise.all([
-        kube.runCommand(selectedContext, 'get pods -A -o json'),
-        kube.runCommand(selectedContext, 'get deployments -A -o json'),
-        kube.runCommand(selectedContext, 'get cronjobs -A -o json'),
-        kube.runCommand(selectedContext, 'get services -A -o json'),
-        kube.runCommand(selectedContext, 'get configmaps -A -o json'),
-        kube.runCommand(selectedContext, 'get secrets -A -o json'),
+      // Run ALL kubectl commands in PARALLEL, each updates its own state
+      const results = await Promise.all([
+        fetchOne('pod', 'get pods -A -o json'),
+        fetchOne('deployment', 'get deployments -A -o json'),
+        fetchOne('cronjob', 'get cronjobs -A -o json'),
+        fetchOne('service', 'get services -A -o json'),
+        fetchOne('configmap', 'get configmaps -A -o json'),
+        fetchOne('secret', 'get secrets -A -o json'),
       ]);
 
       console.log(`[ResourceCache] ${new Date().toISOString()} All parallel fetches completed`);
 
-      const allResources: CachedResource[] = [];
-
-      // Process each resource type
-      if (podsResult.code === 0 && podsResult.stdout) {
-        allResources.push(...processJsonOutput(podsResult.stdout, 'pod'));
-      }
-      if (deploymentsResult.code === 0 && deploymentsResult.stdout) {
-        allResources.push(...processJsonOutput(deploymentsResult.stdout, 'deployment'));
-      }
-      if (cronjobsResult.code === 0 && cronjobsResult.stdout) {
-        allResources.push(...processJsonOutput(cronjobsResult.stdout, 'cronjob'));
-      }
-      if (servicesResult.code === 0 && servicesResult.stdout) {
-        allResources.push(...processJsonOutput(servicesResult.stdout, 'service'));
-      }
-      if (configMapsResult.code === 0 && configMapsResult.stdout) {
-        allResources.push(...processJsonOutput(configMapsResult.stdout, 'configmap'));
-      }
-      if (secretsResult.code === 0 && secretsResult.stdout) {
-        allResources.push(...processJsonOutput(secretsResult.stdout, 'secret'));
-      }
-
+      const allResources = results.flat();
       const now = new Date();
 
-      // Save each resource type separately with expiry
+      // Cache each resource type with its TTL
       const resourcesByType = new Map<ResourceType, CachedResource[]>();
       allResources.forEach(resource => {
         if (!resourcesByType.has(resource.type)) {
@@ -252,7 +281,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         resourcesByType.get(resource.type)!.push(resource);
       });
 
-      // Cache each type with its TTL
       resourcesByType.forEach((resources, type) => {
         const ttl = CACHE_TTL[type];
         const expiresAt = ttl === Infinity ? null as any : new Date(now.getTime() + ttl);
@@ -263,8 +291,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
           lastUpdated: now,
           expiresAt,
         });
-
-        console.log(`[ResourceCache] Cached ${resources.length} ${type}s for ${cacheKey} (expires: ${ttl === Infinity ? 'never' : expiresAt.toLocaleTimeString()})`);
       });
 
       setResources(allResources);
@@ -275,7 +301,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
       console.error('[ResourceCache] Failed to fetch resources:', err);
       setError(errorMessage);
 
-      // Show user-friendly error banner if error context is available
       if (addError) {
         addError({
           message: 'Failed to load Kubernetes resources',
