@@ -200,6 +200,11 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
       .then((termId) => {
         console.log(`[Terminal ${id}] Created successfully with backend ID: ${termId}`);
         terminalIdRef.current = termId;
+
+        // Disable shell history immediately after shell starts
+        // This runs before user can type, preventing history pollution
+        terminalApi.write(termId, ' unset HISTFILE; HISTSIZE=0; SAVEHIST=0\n').catch(() => {});
+
         setIsReady(true);
 
         // Show namespace info (no alias needed - helpers handle namespace)
