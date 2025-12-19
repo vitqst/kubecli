@@ -137,6 +137,52 @@ export function useResourceCache(selectedContext: string) {
         });
       }
 
+      // Fetch configmaps from all namespaces
+      const configMapsResult = await kube.runCommand(
+        selectedContext,
+        'get configmaps -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name'
+      );
+
+      if (configMapsResult.code === 0 && configMapsResult.stdout) {
+        const lines = configMapsResult.stdout.trim().split('\n').filter(line => line.trim());
+        lines.forEach(line => {
+          const parts = line.split(/\s+/);
+          if (parts.length >= 2) {
+            const [namespace, name] = parts;
+            allResources.push({
+              type: 'configmap',
+              name,
+              namespace,
+              status: 'Available',
+              info: 'ConfigMap',
+            });
+          }
+        });
+      }
+
+      // Fetch secrets from all namespaces
+      const secretsResult = await kube.runCommand(
+        selectedContext,
+        'get secrets -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.type'
+      );
+
+      if (secretsResult.code === 0 && secretsResult.stdout) {
+        const lines = secretsResult.stdout.trim().split('\n').filter(line => line.trim());
+        lines.forEach(line => {
+          const parts = line.split(/\s+/);
+          if (parts.length >= 3) {
+            const [namespace, name, type] = parts;
+            allResources.push({
+              type: 'secret',
+              name,
+              namespace,
+              status: type || 'Secret',
+              info: `Secret | ${type || 'Opaque'}`,
+            });
+          }
+        });
+      }
+
       setState({
         resources: allResources,
         isLoading: false,
