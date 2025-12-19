@@ -56,6 +56,13 @@ pub fn terminal_write(terminal_id: String, data: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn terminal_write_silent(terminal_id: String, data: String) -> Result<(), String> {
+    let mut manager = TERMINAL_MANAGER.lock()
+        .map_err(|_| "Failed to lock terminal manager".to_string())?;
+    manager.write_silent(&terminal_id, &data)
+}
+
+#[tauri::command]
 pub fn terminal_resize(terminal_id: String, cols: u16, rows: u16) -> Result<(), String> {
     let mut manager = TERMINAL_MANAGER.lock()
         .map_err(|_| "Failed to lock terminal manager".to_string())?;

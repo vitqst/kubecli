@@ -13,6 +13,9 @@ export const terminal = {
   write: (terminalId: string, data: string): Promise<void> =>
     invoke('terminal_write', { terminalId, data }),
 
+  writeSilent: (terminalId: string, data: string): Promise<void> =>
+    invoke('terminal_write_silent', { terminalId, data }),
+
   resize: (terminalId: string, cols: number, rows: number): Promise<void> =>
     invoke('terminal_resize', { terminalId, cols, rows }),
 

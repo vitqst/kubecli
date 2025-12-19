@@ -113,13 +113,13 @@ impl TerminalManager {
             },
         );
 
-        // Disable shell history and clear screen (silent initialization)
-        // Leading space makes command ignored by history, clear hides output
-        if let Some(session) = self.sessions.get_mut(&terminal_id) {
-            let init_cmd = "unset HISTFILE HISTSIZE SAVEHIST 2>/dev/null;";
-            let _ = session.writer.write_all(init_cmd.as_bytes());
-            let _ = session.writer.flush();
-        }
+        // // Disable shell history and clear screen (silent initialization)
+        // // Leading space makes command ignored by history, clear hides output
+        // if let Some(session) = self.sessions.get_mut(&terminal_id) {
+        //     let init_cmd = "unset HISTFILE HISTSIZE SAVEHIST 2>/dev/null;";
+        //     let _ = session.writer.write_all(init_cmd.as_bytes());
+        //     let _ = session.writer.flush();
+        // }
 
         Ok(terminal_id)
     }
@@ -129,6 +129,24 @@ impl TerminalManager {
             .ok_or_else(|| format!("Terminal {} not found", terminal_id))?;
 
         session.writer.write_all(data.as_bytes())
+            .map_err(|e| format!("Write failed: {}", e))?;
+
+        session.writer.flush()
+            .map_err(|e| format!("Flush failed: {}", e))?;
+
+        Ok(())
+    }
+
+    /// Write commands silently (not shown to user)
+    /// Sends command with leading space (ignored by history) and clears screen after
+    pub fn write_silent(&mut self, terminal_id: &str, data: &str) -> Result<(), String> {
+        let session = self.sessions.get_mut(terminal_id)
+            .ok_or_else(|| format!("Terminal {} not found", terminal_id))?;
+
+        // Leading space to ignore in history, clear to hide from user
+        let silent_cmd = format!(" {} 2>/dev/null; clear\n", data.trim());
+
+        session.writer.write_all(silent_cmd.as_bytes())
             .map_err(|e| format!("Write failed: {}", e))?;
 
         session.writer.flush()

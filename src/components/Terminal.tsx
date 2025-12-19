@@ -43,7 +43,7 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
       // Update KUBECONFIG when config changes
       if (env.KUBECONFIG) {
         commands.push(`export KUBECONFIG=${env.KUBECONFIG}`);
-        messages.push(`\x1b[36m✓ KUBECONFIG: ${env.KUBECONFIG}\x1b[0m`);
+        // messages.push(`\x1b[36m✓ KUBECONFIG: ${env.KUBECONFIG}\x1b[0m`);
       }
 
       // Export namespace as environment variable (no alias needed - helpers handle it)
@@ -51,7 +51,7 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         const namespace = env.KUBECTL_NAMESPACE;
         commands.push(`export KUBECTL_NAMESPACE=${namespace}`);
 
-        messages.push(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
+        // messages.push(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
       }
 
       // Clear and write everything in one operation to prevent double blink
@@ -68,10 +68,10 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         xtermRef.current.writeln('');
       }
 
-      // Send all commands at once to the shell (after visual update)
+      // Send all commands silently (not shown to user)
       if (commands.length > 0 && terminalIdRef.current) {
-        const batchCommand = commands.join('\n') + '\n';
-        terminalApi.write(terminalIdRef.current, batchCommand).catch((err) => {
+        const batchCommand = commands.join('; ');
+        terminalApi.writeSilent(terminalIdRef.current, batchCommand).catch((err) => {
           console.error('Failed to update environment:', err);
         });
       }

@@ -14,6 +14,7 @@ pub fn run() {
             run_kubectl,
             terminal_create,
             terminal_write,
+            terminal_write_silent,
             terminal_resize,
             terminal_close,
         ])
