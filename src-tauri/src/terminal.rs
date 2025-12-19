@@ -46,6 +46,13 @@ impl TerminalManager {
         // This helps zsh and its plugins (like autosuggestions) work correctly
         cmd.arg("-l");
 
+        // For zsh, disable the partial line indicator (%) that appears when
+        // there's no newline at cursor position when shell starts
+        if shell_cmd.contains("zsh") {
+            cmd.arg("-o");
+            cmd.arg("nopromptsp");
+        }
+
         // Set essential terminal environment variables
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
