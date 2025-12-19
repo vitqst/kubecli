@@ -65,6 +65,18 @@ impl TerminalManager {
             cmd.env("HOME", home);
         }
 
+        // Inherit PATH to find kubectl, kubelogin, az CLI, and other tools
+        if let Ok(path) = std::env::var("PATH") {
+            cmd.env("PATH", path);
+        }
+
+        // Inherit Azure-specific env vars for kubelogin authentication
+        for var in &["AZURE_CONFIG_DIR", "AZURE_CLI_HOME", "KUBELOGIN_FORCE_NONINTERACTIVE"] {
+            if let Ok(val) = std::env::var(var) {
+                cmd.env(var, val);
+            }
+        }
+
         // Set a clean LANG/LC_ALL for proper character handling
         cmd.env("LANG", "en_US.UTF-8");
         cmd.env("LC_ALL", "en_US.UTF-8");
