@@ -205,16 +205,19 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         // Leading space makes it ignored by history, clear hides it from user
         terminalApi.write(termId, ' unset HISTFILE HISTSIZE SAVEHIST 2>/dev/null; clear\n').catch(() => {});
 
-        setIsReady(true);
+        // Wait for clear to complete before showing terminal as ready
+        setTimeout(() => {
+          setIsReady(true);
 
-        // Show namespace info (no alias needed - helpers handle namespace)
-        if (env?.KUBECTL_NAMESPACE) {
-          const namespace = env.KUBECTL_NAMESPACE;
-          xterm.writeln(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
-          xterm.writeln('');
-        }
+          // Show namespace info (no alias needed - helpers handle namespace)
+          if (env?.KUBECTL_NAMESPACE) {
+            const namespace = env.KUBECTL_NAMESPACE;
+            xterm.writeln(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
+            xterm.writeln('');
+          }
 
-        if (onReady) onReady();
+          if (onReady) onReady();
+        }, 300);
       })
       .catch((error) => {
         console.error(`[Terminal ${id}] Failed to create:`, error);
