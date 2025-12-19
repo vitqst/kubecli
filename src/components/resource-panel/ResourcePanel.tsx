@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ResourceType, getAllResources, getResourceDefinition } from '../../resources';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
+import { LoadingProgress } from './LoadingProgress';
 
 /**
  * Props for the ResourcePanel component
@@ -49,7 +50,7 @@ export function ResourcePanel({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const { filterByNamespaces, filterByType, isLoading, refresh, refreshType } = useResourceCache();
+  const { filterByNamespaces, filterByType, isLoading, loadingStates, refresh, refreshType } = useResourceCache();
 
   // Keep selection in sync with available namespaces
   useEffect(() => {
@@ -254,7 +255,7 @@ export function ResourcePanel({
       {/* Resource list */}
       <div style={styles.list}>
         {isLoading ? (
-          <div style={styles.loading}>Loading...</div>
+          <LoadingProgress loadingStates={loadingStates} />
         ) : sortedResources.length === 0 ? (
           <div style={styles.empty}>
             {searchQuery ? 'No matching resources' : 'No resources found'}
