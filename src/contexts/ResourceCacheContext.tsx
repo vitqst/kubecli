@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { ResourceType, getResourceDefinition } from '../resources';
 import { useError } from './ErrorContext';
 import { kube } from '../api';
@@ -69,6 +69,19 @@ const CACHE_TTL: Record<ResourceType, number> = {
   ingress: Infinity,           // Never expire (ingresses are stable)
 };
 
+const INITIAL_LOADING_STATES: Record<ResourceType, ResourceLoadingState> = {
+  pod: { status: 'pending' },
+  deployment: { status: 'pending' },
+  cronjob: { status: 'pending' },
+  service: { status: 'pending' },
+  configmap: { status: 'pending' },
+  secret: { status: 'pending' },
+  job: { status: 'pending' },
+  statefulset: { status: 'pending' },
+  daemonset: { status: 'pending' },
+  ingress: { status: 'pending' },
+};
+
 // Helper to check if cache is expired
 function isCacheExpired(entry: TypedCacheEntry): boolean {
   if (entry.expiresAt === null) return false; // Never expires
@@ -77,9 +90,16 @@ function isCacheExpired(entry: TypedCacheEntry): boolean {
 
 export function ResourceCacheProvider({ children, selectedContext, kubeconfigPath = '' }: ResourceCacheProviderProps) {
   const [resources, setResources] = useState<CachedResource[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingStates, setLoadingStates] = useState<Record<ResourceType, ResourceLoadingState>>(
+    INITIAL_LOADING_STATES
+  );
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const isLoading = useMemo(
+    () => Object.values(loadingStates).some(s => s.status === 'loading'),
+    [loadingStates]
+  );
 
   // Try to get error context, but don't fail if not available
   let addError: ((error: any) => void) | undefined;
@@ -98,7 +118,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   const fetchResources = useCallback(async () => {
     if (!selectedContext) return;
 
-    setIsLoading(true);
     setError(null);
 
     console.log(`[ResourceCache] ${new Date().toISOString()} Starting parallel fetch for ${cacheKey}`);
@@ -273,8 +292,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
           },
         });
       }
-    } finally {
-      setIsLoading(false);
     }
   }, [selectedContext, cacheKey, addError]);
 
@@ -399,6 +416,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   const value: ResourceCacheContextType = {
     resources,
     isLoading,
+    loadingStates,
     lastUpdated,
     error,
     search,
