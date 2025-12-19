@@ -121,9 +121,10 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#2d2d30',
     border: '1px solid #454545',
     borderRadius: '4px',
-    padding: '4px 0',
+    padding: '2px 0',
     zIndex: 10000,
-    minWidth: '220px',
+    minWidth: '200px',
+    maxWidth: '320px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
   },
   contextMenuHeader: {
@@ -146,12 +147,12 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: 'nowrap',
   },
   contextMenuSectionTitle: {
-    padding: '6px 12px 4px 12px',
+    padding: '4px 12px 2px 12px',
     color: '#9ba3b0',
-    fontSize: '11px',
+    fontSize: '10px',
     fontWeight: 600,
     textTransform: 'uppercase',
-    letterSpacing: '0.4px',
+    letterSpacing: '0.35px',
   },
   contextMenuDivider: {
     height: '1px',
@@ -161,10 +162,10 @@ const styles: Record<string, React.CSSProperties> = {
   contextMenuItem: {
     display: 'flex',
     alignItems: 'center',
-    padding: '8px 12px',
+    padding: '6px 12px',
     cursor: 'pointer',
     color: '#cccccc',
-    fontSize: '13px',
+    fontSize: '12px',
     transition: 'background-color 0.1s',
   },
   contextMenuIcon: {
@@ -175,9 +176,9 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
   },
   contextMenuEmpty: {
-    padding: '8px 12px',
+    padding: '6px 12px',
     color: '#7f858f',
-    fontSize: '12px',
+    fontSize: '11px',
     fontStyle: 'italic',
   },
 };
