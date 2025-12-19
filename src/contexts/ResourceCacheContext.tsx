@@ -121,19 +121,16 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     console.log(`[ResourceCache] ${new Date().toISOString()} Starting parallel fetch for ${cacheKey}`);
     setError(null);
 
-    // Reset all to loading
-    setLoadingStates({
+    // Reset fetched types to loading (only the 6 we actually fetch)
+    setLoadingStates(prev => ({
+      ...prev,
       pod: { status: 'loading' },
       deployment: { status: 'loading' },
       cronjob: { status: 'loading' },
       service: { status: 'loading' },
       configmap: { status: 'loading' },
       secret: { status: 'loading' },
-      job: { status: 'loading' },
-      statefulset: { status: 'loading' },
-      daemonset: { status: 'loading' },
-      ingress: { status: 'loading' },
-    });
+    }));
 
     /**
      * Helper to extract a value from an object using a JSON path like '.metadata.name'
