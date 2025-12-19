@@ -137,14 +137,19 @@ impl TerminalManager {
         Ok(())
     }
 
-    /// Write commands silently (not saved to history)
-    /// Sends command with leading space so it's ignored by shell history
+    /// Write commands silently (not saved to history, not shown to user)
+    /// Uses ANSI escape codes to erase the command after execution
     pub fn write_silent(&mut self, terminal_id: &str, data: &str) -> Result<(), String> {
         let session = self.sessions.get_mut(terminal_id)
             .ok_or_else(|| format!("Terminal {} not found", terminal_id))?;
 
-        // Leading space to ignore in history, suppress any output
-        let silent_cmd = format!(" {} >/dev/null 2>&1\n", data.trim());
+        // Leading space to ignore in history
+        // After command, use ANSI codes: move up, clear line, move up, clear line (for prompt + command)
+        // \x1b[A = move up, \x1b[2K = clear line, \r = carriage return
+        let silent_cmd = format!(
+            " {} >/dev/null 2>&1; printf '\\033[A\\033[2K\\033[A\\033[2K'\n",
+            data.trim()
+        );
 
         session.writer.write_all(silent_cmd.as_bytes())
             .map_err(|e| format!("Write failed: {}", e))?;
