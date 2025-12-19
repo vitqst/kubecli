@@ -407,12 +407,6 @@ const styles: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
     padding: '4px 0',
   },
-  loading: {
-    padding: '16px',
-    textAlign: 'center',
-    color: '#858585',
-    fontSize: '12px',
-  },
   empty: {
     padding: '16px',
     textAlign: 'center',
