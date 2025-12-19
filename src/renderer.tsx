@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import type { KubeConfigSummary, KubectlResult, KubeContext, KubeConfigFile } from './common/kubeTypes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { HomeScreen } from './components/screens/HomeScreen';
@@ -17,8 +18,6 @@ import { kube as kubeAPI, terminal as terminalAPI } from './api';
 type LoadState = 'idle' | 'loading' | 'error';
 
 function App() {
-  console.log('[App] Component rendering...');
-  
   // State
   const [contexts, setContexts] = useState<KubeContext[]>([]);
   const [selectedContext, setSelectedContext] = useState<string>('');
@@ -106,18 +105,29 @@ function App() {
 
   // Handle config change
   const handleConfigChange = useCallback((newConfigPath: string) => {
-    setIsConfigChanging(true);
+    // Force synchronous render to show loading state immediately
+    flushSync(() => {
+      setIsConfigChanging(true);
+    });
+
+    const startTime = Date.now();
     kubeAPI.setConfig(newConfigPath).then((summary: KubeConfigSummary) => {
       setContexts(summary.contexts);
       setSelectedContext(summary.currentContext || '');
       setKubeconfigPath(summary.kubeconfigPath);
       setAvailableConfigs(summary.availableConfigs || []);
-      
-      if (summary.currentContext) {
-        loadNamespaces(summary.currentContext);
-      }
-      
-      setTimeout(() => setIsConfigChanging(false), 1400);
+
+      // Ensure loading is visible for at least 250ms
+      const elapsed = Date.now() - startTime;
+      const minDisplayTime = 250;
+      const remaining = Math.max(0, minDisplayTime - elapsed);
+      setTimeout(() => {
+        setIsConfigChanging(false);
+        // Load namespaces AFTER UI is responsive (deferred to not block)
+        if (summary.currentContext) {
+          loadNamespaces(summary.currentContext);
+        }
+      }, remaining);
     }).catch((error) => {
       console.error('Failed to change config:', error);
       setIsConfigChanging(false);
@@ -126,13 +136,26 @@ function App() {
 
   // Handle context change
   const handleContextChange = useCallback((newContext: string) => {
-    setIsConfigChanging(true);
+    // Force synchronous render to show loading state immediately
+    flushSync(() => {
+      setIsConfigChanging(true);
+    });
+
+    const startTime = Date.now();
     kubeAPI.setContext(newContext).then((summary: KubeConfigSummary) => {
       setSelectedContext(summary.currentContext || '');
-      if (summary.currentContext) {
-        loadNamespaces(summary.currentContext);
-      }
-      setTimeout(() => setIsConfigChanging(false), 1400);
+
+      // Ensure loading is visible for at least 250ms
+      const elapsed = Date.now() - startTime;
+      const minDisplayTime = 250;
+      const remaining = Math.max(0, minDisplayTime - elapsed);
+      setTimeout(() => {
+        setIsConfigChanging(false);
+        // Load namespaces AFTER UI is responsive (deferred to not block)
+        if (summary.currentContext) {
+          loadNamespaces(summary.currentContext);
+        }
+      }, remaining);
     }).catch((error) => {
       console.error('Failed to change context:', error);
       setIsConfigChanging(false);
@@ -141,16 +164,12 @@ function App() {
 
   // Handle namespace change
   const handleNamespaceChange = useCallback((namespace: string) => {
-    setTimeout(() => {
-      setSelectedNamespace(namespace);
-      
-      if (selectedContext) {
-        const storageKey = `kubecli-namespace-${selectedContext}`;
-        localStorage.setItem(storageKey, namespace);
-      }
-      
-      setTimeout(() => setIsConfigChanging(false), 1400);
-    }, 50);
+    setSelectedNamespace(namespace);
+
+    if (selectedContext) {
+      const storageKey = `kubecli-namespace-${selectedContext}`;
+      localStorage.setItem(storageKey, namespace);
+    }
   }, [selectedContext]);
 
   // Handle edit mode changes from terminal
@@ -348,7 +367,7 @@ function App() {
           availableConfigs={availableConfigs}
           selectedContext={selectedContext}
           contexts={contexts}
-          disabled={false}
+          isLoading={isConfigChanging}
           onConfigChange={handleConfigChange}
           onContextChange={handleContextChange}
           onGetStarted={handleGetStarted}

@@ -3,13 +3,23 @@ use crate::terminal::TERMINAL_MANAGER;
 use tauri::AppHandle;
 
 #[tauri::command]
-pub fn get_contexts(config_path: Option<String>) -> Result<KubeConfigSummary, String> {
-    kube::parse_kubeconfig(config_path)
+pub async fn get_contexts(config_path: Option<String>) -> Result<KubeConfigSummary, String> {
+    // Run file I/O in blocking thread pool to not block the main thread
+    tauri::async_runtime::spawn_blocking(move || {
+        kube::parse_kubeconfig(config_path)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
-pub fn set_context(config_path: String, context_name: String) -> Result<(), String> {
-    kube::set_context(config_path, context_name)
+pub async fn set_context(config_path: String, context_name: String) -> Result<(), String> {
+    // Run kubectl in blocking thread pool
+    tauri::async_runtime::spawn_blocking(move || {
+        kube::set_context(config_path, context_name)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -22,8 +32,13 @@ pub fn set_namespace(
 }
 
 #[tauri::command]
-pub fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Result<String, String> {
-    kube::run_kubectl(args, config_path)
+pub async fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Result<String, String> {
+    // Run kubectl in blocking thread pool to not block the main thread
+    tauri::async_runtime::spawn_blocking(move || {
+        kube::run_kubectl(args, config_path)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]

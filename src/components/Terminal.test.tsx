@@ -2,33 +2,49 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { Terminal } from '../components/Terminal';
 
-// Mock xterm and fit addon
+// Mock ResizeObserver which is not available in jsdom
+class MockResizeObserver {
+  observe = vi.fn();
+  unobserve = vi.fn();
+  disconnect = vi.fn();
+}
+global.ResizeObserver = MockResizeObserver as any;
+
+// Mock xterm and fit addon - factory must be self-contained (hoisted)
 vi.mock('xterm', () => {
+  const MockTerminal = class {
+    open = vi.fn();
+    write = vi.fn();
+    writeln = vi.fn();
+    clear = vi.fn();
+    dispose = vi.fn();
+    onData = vi.fn().mockReturnValue({ dispose: vi.fn() });
+    attachCustomKeyEventHandler = vi.fn();
+    loadAddon = vi.fn();
+    getSelection = vi.fn().mockReturnValue('');
+    clearSelection = vi.fn();
+    buffer = { active: {} };
+    element = { clientWidth: 800, clientHeight: 600 };
+    cols = 80;
+    rows = 24;
+    unicode = { activeVersion: '' };
+  };
   return {
-    Terminal: vi.fn().mockImplementation(() => ({
-      open: vi.fn(),
-      write: vi.fn(),
-      writeln: vi.fn(),
-      clear: vi.fn(),
-      dispose: vi.fn(),
-      onData: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-      attachCustomKeyEventHandler: vi.fn(),
-      loadAddon: vi.fn(),
-      getSelection: vi.fn().mockReturnValue(''),
-      clearSelection: vi.fn(),
-      buffer: { active: {} },
-      element: { clientWidth: 800, clientHeight: 600 },
-      cols: 80,
-      rows: 24,
-    })),
+    Terminal: MockTerminal,
   };
 });
 
 vi.mock('xterm-addon-fit', () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(),
-    dispose: vi.fn(),
-  })),
+  FitAddon: class {
+    fit = vi.fn();
+    dispose = vi.fn();
+  },
+}));
+
+vi.mock('@xterm/addon-unicode11', () => ({
+  Unicode11Addon: class {
+    dispose = vi.fn();
+  },
 }));
 
 // Create mock functions
@@ -151,11 +167,11 @@ describe('Terminal Component', () => {
         expect(mockInvoke).toHaveBeenCalledWith('terminal_create', expect.anything());
       });
 
-      // Wait for command to be written
+      // Wait for command to be written (includes Ctrl+U prefix to clear line)
       await waitFor(() => {
         expect(mockInvoke).toHaveBeenCalledWith('terminal_write', {
           terminalId: 'term_test_1',
-          data: 'kubectl get pods\n',
+          data: '\u0015kubectl get pods\n',
         });
       });
     });

@@ -5,7 +5,7 @@ interface HomeScreenProps {
   availableConfigs: Array<{ path: string; name: string; isDefault: boolean }>;
   selectedContext: string;
   contexts: Array<{ name: string; cluster?: string; server?: string; user?: string }>;
-  disabled: boolean;
+  isLoading: boolean;
   onConfigChange: (path: string) => void;
   onContextChange: (context: string) => void;
   onGetStarted: () => void;
@@ -16,7 +16,7 @@ export function HomeScreen({
   availableConfigs,
   selectedContext,
   contexts,
-  disabled,
+  isLoading,
   onConfigChange,
   onContextChange,
   onGetStarted,
@@ -25,6 +25,21 @@ export function HomeScreen({
 
   return (
     <div style={styles.homeContainer}>
+      {/* Spinner animation */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes fadeIn {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        .loading-overlay {
+          animation: fadeIn 0.15s ease-out;
+        }
+      `}</style>
+
       {/* Home Screen Header */}
       <div style={styles.homeHeader}>
         <div style={styles.logoContainer}>
@@ -40,6 +55,13 @@ export function HomeScreen({
 
       {/* Configuration Card */}
       <div style={styles.homeCard} className="home-card">
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div style={styles.loadingOverlay} className="loading-overlay">
+            <div style={styles.loadingSpinner} />
+            <span style={styles.loadingText}>Loading...</span>
+          </div>
+        )}
         <h2 style={styles.cardTitle}>Configuration</h2>
         
         {/* Kubeconfig Selector */}
@@ -57,7 +79,7 @@ export function HomeScreen({
               onChange={(e) => onConfigChange(e.target.value)}
               style={styles.formSelect}
               className="form-select"
-              disabled={disabled}
+              disabled={isLoading}
             >
               {availableConfigs.map((config) => (
                 <option key={config.path} value={config.path}>
@@ -88,7 +110,7 @@ export function HomeScreen({
                 onChange={(e) => onContextChange(e.target.value)}
                 style={styles.formSelect}
                 className="form-select"
-                disabled={disabled}
+                disabled={isLoading}
               >
                 {contexts.map((ctx) => (
                   <option key={ctx.name} value={ctx.name}>
@@ -126,7 +148,7 @@ export function HomeScreen({
             onClick={onGetStarted}
             style={styles.getStartedButton}
             className="get-started-button"
-            disabled={disabled}
+            disabled={isLoading}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6"></polyline>
@@ -177,6 +199,34 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '8px',
     padding: '32px',
     boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+    position: 'relative' as const,
+  },
+  loadingOverlay: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(30, 30, 30, 0.85)',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '12px',
+    borderRadius: '8px',
+    zIndex: 10,
+  },
+  loadingSpinner: {
+    width: '32px',
+    height: '32px',
+    border: '3px solid #3e3e42',
+    borderTop: '3px solid #4ec9b0',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
+  },
+  loadingText: {
+    color: '#cccccc',
+    fontSize: '0.875rem',
   },
   cardTitle: {
     fontSize: '1.5rem',
