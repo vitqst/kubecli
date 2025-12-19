@@ -19,7 +19,7 @@ export interface Tab {
 /**
  * Return type for the useTabs hook
  */
-interface UseTabsResult {
+export interface UseTabsResult {
   /** List of all tabs */
   tabs: Tab[];
   /** ID of the currently active tab */
@@ -30,6 +30,8 @@ interface UseTabsResult {
   closeTab: (id: string) => void;
   /** Set the active tab by ID */
   setActiveTab: (id: string) => void;
+  /** Update tabs in-place */
+  updateTabs: (updater: (prev: Tab[]) => Tab[]) => void;
   /** Find a tab associated with a specific resource */
   findTabByResource: (type: ResourceType, name: string, namespace: string) => Tab | undefined;
 }
@@ -90,12 +92,17 @@ export function useTabs(): UseTabsResult {
     );
   }, [tabs]);
 
+  const updateTabs = useCallback((updater: (prev: Tab[]) => Tab[]) => {
+    setTabs(updater);
+  }, []);
+
   return {
     tabs,
     activeTabId,
     addTab,
     closeTab,
     setActiveTab: setActiveTabId,
+    updateTabs,
     findTabByResource,
   };
 }

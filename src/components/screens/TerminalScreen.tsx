@@ -102,7 +102,7 @@ export function TerminalScreen({
   onGoHome,
 }: TerminalScreenProps) {
   // Tab management
-  const { tabs, activeTabId, addTab, closeTab, setActiveTab, findTabByResource } = useTabs();
+  const { tabs, activeTabId, addTab, closeTab, setActiveTab, updateTabs } = useTabs();
 
   // Bottom panel
   const { isOpen: isPanelOpen, selectedResourceType, openPanel, closePanel, togglePanel } = useBottomPanel();
@@ -114,7 +114,7 @@ export function TerminalScreen({
     KUBECTL_NAMESPACE: selectedNamespace
   }), [kubeconfigPath, selectedNamespace]);
 
-  // Handle resource action: run in the active tab without creating a new one
+  // Handle resource action: run in the active tab and rename it to the resource
   const handleResourceAction = useCallback((
     actionId: string,
     resourceType: ResourceType,
@@ -122,8 +122,15 @@ export function TerminalScreen({
     namespace?: string
   ) => {
     const ns = namespace || selectedNamespace;
+    // Rename the active tab to the resource
+    updateTabs(prev => prev.map(tab => (
+      tab.id === activeTabId
+        ? { ...tab, label: resourceName, resourceRef: { type: resourceType, name: resourceName, namespace: ns, action: actionId } }
+        : tab
+    )));
+
     onResourceAction(actionId, resourceType, resourceName, ns);
-  }, [onResourceAction, selectedNamespace]);
+  }, [activeTabId, onResourceAction, selectedNamespace, updateTabs]);
 
   // Duplicate dialog is no longer needed (no new tabs on action)
 
