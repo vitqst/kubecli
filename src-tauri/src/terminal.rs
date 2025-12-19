@@ -78,7 +78,19 @@ impl TerminalManager {
         }
 
         // Inherit Azure-specific env vars for kubelogin authentication
-        for var in &["AZURE_CONFIG_DIR", "AZURE_CLI_HOME", "KUBELOGIN_FORCE_NONINTERACTIVE"] {
+        for var in &[
+            "AZURE_CONFIG_DIR",
+            "AZURE_CLI_HOME",
+            "KUBELOGIN_FORCE_NONINTERACTIVE",
+            "AZURE_TENANT_ID",
+            "AZURE_CLIENT_ID",
+            "AZURE_CLIENT_SECRET",
+            "AZURE_AUTHORITY_HOST",
+            "AZURE_FEDERATED_TOKEN_FILE",
+            "XDG_RUNTIME_DIR",
+            "XDG_CACHE_HOME",
+            "XDG_DATA_HOME",
+        ] {
             if let Ok(val) = std::env::var(var) {
                 cmd.env(var, val);
             }

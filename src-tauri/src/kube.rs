@@ -202,7 +202,20 @@ pub fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Result<Str
     }
 
     // Inherit Azure-specific env vars for auth
-    for var in &["AZURE_CONFIG_DIR", "AZURE_CLI_HOME", "KUBELOGIN_FORCE_NONINTERACTIVE"] {
+    // kubelogin needs these to find cached tokens and authenticate
+    for var in &[
+        "AZURE_CONFIG_DIR",
+        "AZURE_CLI_HOME",
+        "KUBELOGIN_FORCE_NONINTERACTIVE",
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_ID",
+        "AZURE_CLIENT_SECRET",
+        "AZURE_AUTHORITY_HOST",
+        "AZURE_FEDERATED_TOKEN_FILE",
+        "XDG_RUNTIME_DIR",
+        "XDG_CACHE_HOME",
+        "XDG_DATA_HOME",
+    ] {
         if let Ok(val) = std::env::var(var) {
             cmd.env(var, val);
         }
