@@ -45,6 +45,8 @@ export function ResourcePanel({
   const [isResizing, setIsResizing] = useState(false);
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [selectedNamespaces, setSelectedNamespaces] = useState<string[]>([]); // empty = all
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const panelRef = useRef<HTMLDivElement>(null);
 
   const { filterByNamespaces, filterByType, isLoading, refresh, refreshType } = useResourceCache();
@@ -74,6 +76,56 @@ export function ResourcePanel({
     const query = searchQuery.toLowerCase();
     return resources.filter(r => r.name.toLowerCase().includes(query));
   }, [resources, searchQuery]);
+
+  // Sort resources
+  const sortedResources = React.useMemo(() => {
+    if (!sortColumn) return filteredResources;
+
+    const resourceDef = selectedResourceType ? getResourceDefinition(selectedResourceType) : null;
+    const columnDef = resourceDef?.columns.find(c => c.key === sortColumn);
+
+    return [...filteredResources].sort((a, b) => {
+      let aVal = a.columns[sortColumn];
+      let bVal = b.columns[sortColumn];
+
+      // Apply transform if available for consistent sorting
+      if (columnDef?.transform) {
+        aVal = columnDef.transform(aVal);
+        bVal = columnDef.transform(bVal);
+      }
+
+      // Handle null/undefined
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return sortDirection === 'asc' ? 1 : -1;
+      if (bVal == null) return sortDirection === 'asc' ? -1 : 1;
+
+      // Compare values
+      let comparison = 0;
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        comparison = aVal - bVal;
+      } else {
+        comparison = String(aVal).localeCompare(String(bVal));
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredResources, sortColumn, sortDirection, selectedResourceType]);
+
+  // Handle column header click for sorting
+  const handleColumnClick = useCallback((columnKey: string) => {
+    if (sortColumn === columnKey) {
+      // Toggle direction or clear sort
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortColumn(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(columnKey);
+      setSortDirection('asc');
+    }
+  }, [sortColumn, sortDirection]);
 
   // Handle resize
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -109,9 +161,11 @@ export function ResourcePanel({
     };
   }, [isResizing, height]);
 
-  // Clear search when resource type changes
+  // Clear search and sort when resource type changes
   useEffect(() => {
     setSearchQuery('');
+    setSortColumn(null);
+    setSortDirection('asc');
   }, [selectedResourceType]);
 
   const toggleNamespace = useCallback((ns: string) => {
@@ -201,7 +255,7 @@ export function ResourcePanel({
       <div style={styles.list}>
         {isLoading ? (
           <div style={styles.loading}>Loading...</div>
-        ) : filteredResources.length === 0 ? (
+        ) : sortedResources.length === 0 ? (
           <div style={styles.empty}>
             {searchQuery ? 'No matching resources' : 'No resources found'}
           </div>
@@ -209,10 +263,25 @@ export function ResourcePanel({
           <>
             <div style={{ ...styles.tableHeader, gridTemplateColumns: gridTemplate }}>
               {columns.map(col => (
-                <span key={col.key} style={styles.colHeader}>{col.label}</span>
+                <span
+                  key={col.key}
+                  style={{
+                    ...styles.colHeader,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                  }}
+                  onClick={() => handleColumnClick(col.key)}
+                >
+                  {col.label}
+                  {sortColumn === col.key && (
+                    <span style={styles.sortIndicator}>
+                      {sortDirection === 'asc' ? ' ▲' : ' ▼'}
+                    </span>
+                  )}
+                </span>
               ))}
             </div>
-            {filteredResources.map(resource => {
+            {sortedResources.map(resource => {
               const rowKey = `${resource.namespace}/${resource.name}`;
               const isHovered = hoveredRow === rowKey;
 
@@ -395,6 +464,11 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  sortIndicator: {
+    fontSize: '8px',
+    marginLeft: '2px',
+    color: '#0078d4',
   },
   row: {
     display: 'grid',
