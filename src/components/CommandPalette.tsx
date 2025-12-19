@@ -506,10 +506,7 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
           // Handle app-level actions
           if (selected.type === 'app-action') {
             if (selected.actionId === 'app:reload') {
-              // Cleanup terminals before reload
-              if (window.terminal) {
-                window.terminal.close('main').catch(console.error);
-              }
+              // Reload app
               setTimeout(() => window.location.reload(), 100);
             } else if (selected.actionId === 'app:refresh-cache') {
               refresh();
@@ -623,10 +620,7 @@ export function CommandPalette({ isOpen, onClose, onSelectResult, onShowContextM
                         onClick={() => {
                           if (command.type === 'app-action') {
                             if (command.actionId === 'app:reload') {
-                              // Cleanup terminals before reload
-                              if (window.terminal) {
-                                window.terminal.close('main').catch(console.error);
-                              }
+                              // Reload app
                               setTimeout(() => window.location.reload(), 100);
                             } else if (command.actionId === 'app:refresh-cache') {
                               refresh();

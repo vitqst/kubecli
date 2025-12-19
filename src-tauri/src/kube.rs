@@ -2,6 +2,13 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+
+// Cache for available kubeconfig files to avoid rescanning on every context switch
+lazy_static! {
+    static ref AVAILABLE_CONFIGS: Mutex<Vec<KubeConfigFile>> = Mutex::new(Vec::new());
+}
 
 // Types matching the frontend's KubeTypes.ts
 
@@ -18,6 +25,14 @@ pub struct KubeConfigSummary {
     pub current_context: String,
     pub contexts: Vec<ContextInfo>,
     pub config_path: String,
+    pub available_configs: Vec<KubeConfigFile>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct KubeConfigFile {
+    pub path: String,
+    pub name: String,
+    pub is_default: bool,
 }
 
 // Internal types for parsing kubeconfig YAML
@@ -49,6 +64,92 @@ fn get_default_config_path() -> PathBuf {
         .join("config")
 }
 
+fn scan_kube_configs() -> Result<Vec<KubeConfigFile>, String> {
+    // First check cache
+    let cached = AVAILABLE_CONFIGS.lock().map_err(|_| "Failed to lock cache")?;
+    if !cached.is_empty() {
+        return Ok(cached.clone());
+    }
+    drop(cached); // Release lock
+
+    // Not cached, scan directory
+    let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
+    let kube_dir = home_dir.join(".kube");
+
+    // Check if ~/.kube directory exists
+    if !kube_dir.exists() {
+        // Cache empty result
+        let mut cache = AVAILABLE_CONFIGS.lock().map_err(|_| "Failed to lock cache")?;
+        *cache = Vec::new();
+        return Ok(vec![]);
+    }
+
+    // Read directory entries
+    let entries = fs::read_dir(&kube_dir)
+        .map_err(|e| format!("Failed to read ~/.kube directory: {}", e))?;
+
+    let mut configs = Vec::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        // Skip directories
+        if path.is_dir() {
+            continue;
+        }
+
+        // Check if it's a file (not hidden like .env, .secrets)
+        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+            // Skip hidden files
+            if filename.starts_with('.') {
+                continue;
+            }
+
+            // Try to read and parse as kubeconfig, check if it has contexts
+            if let Ok(contents) = fs::read_to_string(&path) {
+                if let Ok(config) = serde_yaml::from_str::<KubeConfig>(&contents) {
+                    // Only include configs that have at least one context
+                    if let Some(contexts) = config.contexts {
+                        if !contexts.is_empty() {
+                            let name = if filename == "config" {
+                                "default".to_string()
+                            } else {
+                                filename.to_string()
+                            };
+
+                            let is_default = filename.to_lowercase() == "config";
+
+                            configs.push(KubeConfigFile {
+                                path: path.to_string_lossy().to_string(),
+                                name,
+                                is_default,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort: default config first, then alphabetically
+    configs.sort_by(|a, b| {
+        if a.is_default && !b.is_default {
+            std::cmp::Ordering::Less
+        } else if !a.is_default && b.is_default {
+            std::cmp::Ordering::Greater
+        } else {
+            a.name.cmp(&b.name)
+        }
+    });
+
+    // Cache the results
+    let mut cache = AVAILABLE_CONFIGS.lock().map_err(|_| "Failed to lock cache")?;
+    *cache = configs.clone();
+
+    Ok(configs)
+}
+
 pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary, String> {
     let path = config_path
         .map(PathBuf::from)
@@ -72,10 +173,18 @@ pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary
         })
         .collect();
 
+    // Scan for available kubeconfig files
+    let available_configs = scan_kube_configs()
+        .unwrap_or_else(|e| {
+            eprintln!("Warning: Failed to scan kube configs: {}", e);
+            vec![]
+        });
+
     Ok(KubeConfigSummary {
         current_context: config.current_context.unwrap_or_default(),
         contexts,
         config_path: path.to_string_lossy().to_string(),
+        available_configs,
     })
 }
 

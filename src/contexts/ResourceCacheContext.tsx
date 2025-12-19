@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { ResourceType } from '../resources';
 import { useError } from './ErrorContext';
+import { kube } from '../api';
 
 export interface CachedResource {
   type: ResourceType;
@@ -83,20 +84,39 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
 
   // Fetch all resources
   const fetchResources = useCallback(async () => {
-    if (!selectedContext || !window.kube) return;
+    if (!selectedContext) return;
 
     setIsLoading(true);
     setError(null);
 
+    console.log(`[ResourceCache] ${new Date().toISOString()} Starting parallel fetch for ${cacheKey}`);
+
     try {
+      // Run ALL kubectl commands in PARALLEL
+      const [podsResult, deploymentsResult, cronjobsResult, servicesResult] = await Promise.all([
+        kube.runCommand(
+          selectedContext,
+          'get pods -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount'
+        ),
+        kube.runCommand(
+          selectedContext,
+          'get deployments -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas'
+        ),
+        kube.runCommand(
+          selectedContext,
+          'get cronjobs -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,SCHEDULE:.spec.schedule,SUSPEND:.spec.suspend'
+        ),
+        kube.runCommand(
+          selectedContext,
+          'get services -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.spec.type,CLUSTER-IP:.spec.clusterIP'
+        ),
+      ]);
+
+      console.log(`[ResourceCache] ${new Date().toISOString()} All parallel fetches completed`);
+
       const allResources: CachedResource[] = [];
 
-      // Fetch pods
-      const podsResult = await window.kube.runCommand(
-        selectedContext,
-        'get pods -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount'
-      );
-
+      // Process pods
       if (podsResult.code === 0 && podsResult.stdout) {
         const lines = podsResult.stdout.trim().split('\n').filter(line => line.trim());
         lines.forEach(line => {
@@ -106,7 +126,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
             const readyArr = readyStr?.split(',').filter(r => r === 'true') || [];
             const totalArr = readyStr?.split(',') || [];
             const ready = `${readyArr.length}/${totalArr.length}`;
-            
+
             allResources.push({
               type: 'pod',
               name,
@@ -118,12 +138,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         });
       }
 
-      // Fetch deployments
-      const deploymentsResult = await window.kube.runCommand(
-        selectedContext,
-        'get deployments -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas'
-      );
-
+      // Process deployments
       if (deploymentsResult.code === 0 && deploymentsResult.stdout) {
         const lines = deploymentsResult.stdout.trim().split('\n').filter(line => line.trim());
         lines.forEach(line => {
@@ -141,12 +156,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         });
       }
 
-      // Fetch cronjobs
-      const cronjobsResult = await window.kube.runCommand(
-        selectedContext,
-        'get cronjobs -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,SCHEDULE:.spec.schedule,SUSPEND:.spec.suspend'
-      );
-
+      // Process cronjobs
       if (cronjobsResult.code === 0 && cronjobsResult.stdout) {
         const lines = cronjobsResult.stdout.trim().split('\n').filter(line => line.trim());
         lines.forEach(line => {
@@ -165,12 +175,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         });
       }
 
-      // Fetch services
-      const servicesResult = await window.kube.runCommand(
-        selectedContext,
-        'get services -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.spec.type,CLUSTER-IP:.spec.clusterIP'
-      );
-
+      // Process services
       if (servicesResult.code === 0 && servicesResult.stdout) {
         const lines = servicesResult.stdout.trim().split('\n').filter(line => line.trim());
         lines.forEach(line => {
@@ -248,6 +253,8 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   useEffect(() => {
     if (!selectedContext) return;
 
+    console.log(`[ResourceCache] ${new Date().toISOString()} useEffect triggered for ${cacheKey}`);
+
     // Check each resource type separately
     const resourceTypes: ResourceType[] = ['pod', 'deployment', 'cronjob', 'service'];
     const cachedResources: CachedResource[] = [];
@@ -257,18 +264,18 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     resourceTypes.forEach(type => {
       const typedCacheKey = `${cacheKey}::${type}`;
       const cached = cacheStorage.get(typedCacheKey);
-      
+
       if (cached && !isCacheExpired(cached)) {
         // Valid cache - load it
         cachedResources.push(...cached.resources);
         if (!latestUpdate || cached.lastUpdated > latestUpdate) {
           latestUpdate = cached.lastUpdated;
         }
-        console.log(`[ResourceCache] Loaded ${cached.resources.length} ${type}s from cache for ${cacheKey}`);
+        console.log(`[ResourceCache] ${new Date().toISOString()} Loaded ${cached.resources.length} ${type}s from cache`);
       } else {
         // No cache or expired - need to fetch
         if (cached) {
-          console.log(`[ResourceCache] Cache expired for ${type}s in ${cacheKey}, will refresh`);
+          console.log(`[ResourceCache] ${new Date().toISOString()} Cache expired for ${type}s, will refresh`);
         }
         needsFetch = true;
       }
@@ -278,15 +285,16 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
       // All types cached and valid - use cache
       setResources(cachedResources);
       setLastUpdated(latestUpdate);
-      console.log(`[ResourceCache] Loaded ${cachedResources.length} total resources from cache for ${cacheKey}`);
+      console.log(`[ResourceCache] ${new Date().toISOString()} Using ${cachedResources.length} cached resources`);
     } else if (cachedResources.length > 0 && needsFetch) {
       // Some cached, some need fetch - show cached first, then fetch
       setResources(cachedResources);
       setLastUpdated(latestUpdate);
-      console.log(`[ResourceCache] Loaded ${cachedResources.length} cached resources, fetching fresh data...`);
+      console.log(`[ResourceCache] ${new Date().toISOString()} Loaded ${cachedResources.length} cached, fetching fresh...`);
       fetchResources();
     } else {
       // No cache at all - fetch fresh data
+      console.log(`[ResourceCache] ${new Date().toISOString()} No cache, fetching fresh data...`);
       fetchResources();
     }
   }, [selectedContext, cacheKey, fetchResources]);

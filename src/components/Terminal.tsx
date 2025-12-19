@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
+import { Unicode11Addon } from '@xterm/addon-unicode11';
 import 'xterm/css/xterm.css';
 import { terminal as terminalApi } from '../api';
 
@@ -8,13 +9,15 @@ interface TerminalProps {
   id: string;
   cwd?: string;
   env?: Record<string, string>;
+  pendingCommand?: string | null;
+  onCommandExecuted?: () => void;
   onReady?: () => void;
   onExit?: (exitCode: number, signal?: number) => void;
   onEditModeChange?: (isEditMode: boolean) => void;
   isLoading?: boolean;
 }
 
-export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLoading = false }: TerminalProps) {
+export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onReady, onExit, onEditModeChange, isLoading = false }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -75,6 +78,26 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
     }, 500); // Wait 500ms for overlay to be fully visible before any terminal updates
   }, [env, id, isReady]);
 
+  // Handle pending command execution
+  useEffect(() => {
+    if (!pendingCommand || !isReady || !terminalIdRef.current || !isMountedRef.current) return;
+
+    console.log(`[Terminal ${id}] Executing pending command:`, pendingCommand);
+
+    // Clear current line first with Ctrl+U, then send the command
+    // Using Ctrl+U alone to avoid Ctrl+C eating the first character
+    const clearAndExecute = '\x15' + pendingCommand + '\n';
+
+    terminalApi.write(terminalIdRef.current, clearAndExecute).then(() => {
+      console.log(`[Terminal ${id}] Command sent successfully`);
+      if (onCommandExecuted) {
+        onCommandExecuted();
+      }
+    }).catch((error) => {
+      console.error(`[Terminal ${id}] Failed to execute command:`, error);
+    });
+  }, [pendingCommand, isReady, id, onCommandExecuted]);
+
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -84,6 +107,10 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
     }
 
     console.log(`[Terminal ${id}] Initializing...`);
+
+    // Store cleanup functions for async listeners
+    let unlistenData: (() => void) | null = null;
+    let unlistenExit: (() => void) | null = null;
 
     // Create xterm instance
     const xterm = new XTerm({
@@ -119,6 +146,12 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
     const fitAddon = new FitAddon();
     xterm.loadAddon(fitAddon);
 
+    // Load Unicode11 addon for proper handling of wide characters
+    // This fixes cursor positioning with zsh themes using special characters like ╰─$
+    const unicode11Addon = new Unicode11Addon();
+    xterm.loadAddon(unicode11Addon);
+    xterm.unicode.activeVersion = '11';
+
     // Open terminal in DOM
     if (!terminalRef.current) {
       console.error(`[Terminal ${id}] Container ref is null`);
@@ -139,9 +172,27 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
     xtermRef.current = xterm;
     fitAddonRef.current = fitAddon;
 
-    // Store cleanup functions for async listeners
-    let unlistenData: (() => void) | null = null;
-    let unlistenExit: (() => void) | null = null;
+    // Register event listeners BEFORE creating backend terminal to avoid race condition
+    // This ensures we don't miss any early output from the PTY
+    terminalApi.onData((payload) => {
+      if (payload.terminalId === terminalIdRef.current && xtermRef.current && isMountedRef.current) {
+        xtermRef.current.write(payload.data);
+      }
+    }).then((unlisten) => {
+      unlistenData = unlisten;
+    });
+
+    terminalApi.onExit((termId) => {
+      if (termId === terminalIdRef.current) {
+        console.log(`[Terminal ${id}] Exited`);
+        if (xtermRef.current) {
+          xtermRef.current.writeln(`\r\n\x1b[33mTerminal exited\x1b[0m`);
+        }
+        if (onExit) onExit(0);
+      }
+    }).then((unlisten) => {
+      unlistenExit = unlisten;
+    });
 
     // Create backend terminal
     terminalApi
@@ -179,6 +230,11 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
       // Allow global shortcuts to bubble up
       // Ctrl+Shift+P / Cmd+Shift+P - Command Palette
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'P') {
+        return false; // Let it bubble to global handler
+      }
+
+      // Ctrl+K / Cmd+K - Kubectl Command Palette
+      if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
         return false; // Let it bubble to global handler
       }
 
@@ -304,28 +360,6 @@ export function Terminal({ id, cwd, env, onReady, onExit, onEditModeChange, isLo
     };
 
     terminalRef.current.addEventListener('contextmenu', contextMenuHandler);
-
-    // Handle data from backend - display in terminal (Tauri event listener)
-    terminalApi.onData((payload) => {
-      if (payload.terminalId === terminalIdRef.current && xtermRef.current && isMountedRef.current) {
-        xtermRef.current.write(payload.data);
-      }
-    }).then((unlisten) => {
-      unlistenData = unlisten;
-    });
-
-    // Handle terminal exit (Tauri event listener)
-    terminalApi.onExit((termId) => {
-      if (termId === terminalIdRef.current) {
-        console.log(`[Terminal ${id}] Exited`);
-        if (xtermRef.current) {
-          xtermRef.current.writeln(`\r\n\x1b[33mTerminal exited\x1b[0m`);
-        }
-        if (onExit) onExit(0);
-      }
-    }).then((unlisten) => {
-      unlistenExit = unlisten;
-    });
 
     // Handle window resize - make terminal grow with window
     const handleResize = () => {

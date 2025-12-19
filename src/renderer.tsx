@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import type { KubeConfigSummary, KubectlResult, KubeContext, KubeConfigFile } from './common/kubeTypes';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { HomeScreen } from './components/screens/HomeScreen';
@@ -10,22 +11,13 @@ import { ResourceCacheProvider } from './contexts/ResourceCacheContext';
 import { ErrorProvider } from './contexts/ErrorContext';
 import { ErrorBanner } from './components/ErrorBanner';
 import { CommandPalette } from './components/CommandPalette';
-
-// Fix for webpack asset relocator __dirname issue in renderer
-declare global {
-  var __dirname: string;
-}
-if (typeof __dirname === 'undefined') {
-  (globalThis as any).__dirname = '';
-}
+import { KubectlPalette } from './components/KubectlPalette';
+import { addRecentCommand } from './commands';
+import { kube as kubeAPI, terminal as terminalAPI } from './api';
 
 type LoadState = 'idle' | 'loading' | 'error';
 
-const kubeAPI = window.kube;
-
 function App() {
-  console.log('[App] Component rendering...');
-  
   // State
   const [contexts, setContexts] = useState<KubeContext[]>([]);
   const [selectedContext, setSelectedContext] = useState<string>('');
@@ -45,11 +37,13 @@ function App() {
   } | null>(null);
   const [isInEditMode, setIsInEditMode] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [isKubectlPaletteOpen, setIsKubectlPaletteOpen] = useState<boolean>(false);
+  const [pendingCommand, setPendingCommand] = useState<string | null>(null);
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
-    if (!contextName || !kubeAPI) return;
-    
+    if (!contextName) return;
+
     setLoadingNamespaces(true);
     try {
       const result = await kubeAPI.runCommand(contextName, 'get namespaces -o jsonpath={.items[*].metadata.name}');
@@ -74,13 +68,18 @@ function App() {
     }
   }, []);
 
-  // Keyboard shortcut: Ctrl+Shift+P to open command palette (VSCode style)
+  // Keyboard shortcuts: Ctrl+Shift+P for command palette, Ctrl+K for kubectl palette
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Shift+P or Cmd+Shift+P (Mac)
+      // Ctrl+Shift+P or Cmd+Shift+P (Mac) - Resource Command Palette
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
         e.preventDefault();
         setIsCommandPaletteOpen(true);
+      }
+      // Ctrl+K or Cmd+K - Kubectl Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsKubectlPaletteOpen(true);
       }
     };
 
@@ -90,8 +89,6 @@ function App() {
 
   // Load initial contexts
   useEffect(() => {
-    if (!kubeAPI) return;
-    
     kubeAPI.getContexts().then((summary: KubeConfigSummary) => {
       setContexts(summary.contexts);
       setSelectedContext(summary.currentContext || '');
@@ -108,20 +105,29 @@ function App() {
 
   // Handle config change
   const handleConfigChange = useCallback((newConfigPath: string) => {
-    if (!kubeAPI) return;
-    
-    setIsConfigChanging(true);
+    // Force synchronous render to show loading state immediately
+    flushSync(() => {
+      setIsConfigChanging(true);
+    });
+
+    const startTime = Date.now();
     kubeAPI.setConfig(newConfigPath).then((summary: KubeConfigSummary) => {
       setContexts(summary.contexts);
       setSelectedContext(summary.currentContext || '');
       setKubeconfigPath(summary.kubeconfigPath);
       setAvailableConfigs(summary.availableConfigs || []);
-      
-      if (summary.currentContext) {
-        loadNamespaces(summary.currentContext);
-      }
-      
-      setTimeout(() => setIsConfigChanging(false), 1400);
+
+      // Ensure loading is visible for at least 250ms
+      const elapsed = Date.now() - startTime;
+      const minDisplayTime = 250;
+      const remaining = Math.max(0, minDisplayTime - elapsed);
+      setTimeout(() => {
+        setIsConfigChanging(false);
+        // Load namespaces AFTER UI is responsive (deferred to not block)
+        if (summary.currentContext) {
+          loadNamespaces(summary.currentContext);
+        }
+      }, remaining);
     }).catch((error) => {
       console.error('Failed to change config:', error);
       setIsConfigChanging(false);
@@ -130,15 +136,26 @@ function App() {
 
   // Handle context change
   const handleContextChange = useCallback((newContext: string) => {
-    if (!kubeAPI) return;
-    
-    setIsConfigChanging(true);
+    // Force synchronous render to show loading state immediately
+    flushSync(() => {
+      setIsConfigChanging(true);
+    });
+
+    const startTime = Date.now();
     kubeAPI.setContext(newContext).then((summary: KubeConfigSummary) => {
       setSelectedContext(summary.currentContext || '');
-      if (summary.currentContext) {
-        loadNamespaces(summary.currentContext);
-      }
-      setTimeout(() => setIsConfigChanging(false), 1400);
+
+      // Ensure loading is visible for at least 250ms
+      const elapsed = Date.now() - startTime;
+      const minDisplayTime = 250;
+      const remaining = Math.max(0, minDisplayTime - elapsed);
+      setTimeout(() => {
+        setIsConfigChanging(false);
+        // Load namespaces AFTER UI is responsive (deferred to not block)
+        if (summary.currentContext) {
+          loadNamespaces(summary.currentContext);
+        }
+      }, remaining);
     }).catch((error) => {
       console.error('Failed to change context:', error);
       setIsConfigChanging(false);
@@ -147,16 +164,12 @@ function App() {
 
   // Handle namespace change
   const handleNamespaceChange = useCallback((namespace: string) => {
-    setTimeout(() => {
-      setSelectedNamespace(namespace);
-      
-      if (selectedContext) {
-        const storageKey = `kubecli-namespace-${selectedContext}`;
-        localStorage.setItem(storageKey, namespace);
-      }
-      
-      setTimeout(() => setIsConfigChanging(false), 1400);
-    }, 50);
+    setSelectedNamespace(namespace);
+
+    if (selectedContext) {
+      const storageKey = `kubecli-namespace-${selectedContext}`;
+      localStorage.setItem(storageKey, namespace);
+    }
   }, [selectedContext]);
 
   // Handle edit mode changes from terminal
@@ -167,8 +180,8 @@ function App() {
   // Handle resource action
   const handleResourceAction = useCallback(
     (actionId: string, resourceType: ResourceType, resourceName: string, customNamespace?: string) => {
-      if (!window.terminal || !selectedNamespace) return;
-      
+      if (!selectedNamespace) return;
+
       if (isInEditMode) {
         console.warn('Cannot execute action while terminal is in edit mode');
         return;
@@ -216,8 +229,6 @@ function App() {
 
   // Execute action with prompt values
   const executeAction = useCallback((actionId: string, context: ResourceActionContext, promptValues: Record<string, any>) => {
-    if (!window.terminal) return;
-
     const resource = getResourceDefinition(context.resourceType);
     if (!resource) return;
 
@@ -225,7 +236,18 @@ function App() {
     if (!action) return;
 
     const command = action.getCommand(context, promptValues);
-    window.terminal.write('main', command);
+    console.log('[Action] Executing command:', command);
+
+    // Ensure terminal is visible and send command
+    if (!showTerminal) {
+      setShowTerminal(true);
+    }
+    setPendingCommand(command);
+  }, [showTerminal]);
+
+  // Handle command executed callback - clear pending command
+  const handleCommandExecuted = useCallback(() => {
+    setPendingCommand(null);
   }, []);
 
   // Handle prompt confirm
@@ -240,6 +262,30 @@ function App() {
   const handlePromptCancel = useCallback(() => {
     setPromptDialog(null);
   }, []);
+
+  // Handle kubectl palette command execution
+  const handleKubectlCommand = useCallback((command: string) => {
+    // Extract command ID from the command for recent tracking
+    // This is a simple approach - match against known patterns
+    if (command.includes('get pods')) addRecentCommand('list-pods');
+    else if (command.includes('get deployments')) addRecentCommand('list-deployments');
+    else if (command.includes('get services')) addRecentCommand('list-services');
+    else if (command.includes('get secrets')) addRecentCommand('list-secrets');
+    else if (command.includes('get configmaps')) addRecentCommand('list-configmaps');
+    else if (command.includes('get ingresses')) addRecentCommand('list-ingresses');
+    else if (command.includes('get nodes')) addRecentCommand('get-nodes');
+    else if (command.includes('cluster-info')) addRecentCommand('cluster-info');
+    else if (command.includes('get namespaces')) addRecentCommand('get-namespaces');
+    else if (command.includes('get events')) addRecentCommand('view-events');
+    else if (command.includes('top pods')) addRecentCommand('top-pods');
+    else if (command.includes('top nodes')) addRecentCommand('top-nodes');
+
+    // Ensure terminal is visible and send command
+    if (!showTerminal) {
+      setShowTerminal(true);
+    }
+    setPendingCommand(command);
+  }, [showTerminal]);
 
   // Handle go home
   const handleGoHome = useCallback(() => {
@@ -306,6 +352,8 @@ function App() {
           loadingNamespaces={loadingNamespaces}
           isInEditMode={isInEditMode}
           isConfigChanging={isConfigChanging}
+          pendingCommand={pendingCommand}
+          onCommandExecuted={handleCommandExecuted}
           onConfigChange={handleConfigChange}
           onContextChange={handleContextChange}
           onNamespaceChange={handleNamespaceChange}
@@ -319,7 +367,7 @@ function App() {
           availableConfigs={availableConfigs}
           selectedContext={selectedContext}
           contexts={contexts}
-          disabled={false}
+          isLoading={isConfigChanging}
           onConfigChange={handleConfigChange}
           onContextChange={handleContextChange}
           onGetStarted={handleGetStarted}
@@ -331,6 +379,15 @@ function App() {
             isOpen={isCommandPaletteOpen}
             onClose={() => setIsCommandPaletteOpen(false)}
             onSelectResult={handleResourceAction}
+          />
+
+          {/* Kubectl Command Palette */}
+          <KubectlPalette
+            isOpen={isKubectlPaletteOpen}
+            onClose={() => setIsKubectlPaletteOpen(false)}
+            onExecute={handleKubectlCommand}
+            currentNamespace={selectedNamespace}
+            namespaces={namespaces}
           />
 
           {/* Action Prompt Dialog */}

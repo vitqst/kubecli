@@ -1,4 +1,4 @@
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
@@ -6,6 +6,7 @@ use std::thread;
 use tauri::{AppHandle, Emitter};
 
 pub struct PtySession {
+    master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
     _reader_handle: thread::JoinHandle<()>,
 }
@@ -40,7 +41,28 @@ impl TerminalManager {
         });
 
         let mut cmd = CommandBuilder::new(&shell_cmd);
+
+        // Start as login shell for proper environment initialization
+        // This helps zsh and its plugins (like autosuggestions) work correctly
+        cmd.arg("-l");
+
+        // Set essential terminal environment variables
         cmd.env("TERM", "xterm-256color");
+        cmd.env("COLORTERM", "truecolor");
+
+        // Clear potentially problematic inherited variables
+        // that can interfere with shell initialization
+        cmd.env_remove("ZDOTDIR");
+        cmd.env_remove("SHELL_SESSION_ID");
+
+        // Set HOME to ensure shell finds config files
+        if let Ok(home) = std::env::var("HOME") {
+            cmd.env("HOME", home);
+        }
+
+        // Set a clean LANG/LC_ALL for proper character handling
+        cmd.env("LANG", "en_US.UTF-8");
+        cmd.env("LC_ALL", "en_US.UTF-8");
 
         pair.slave
             .spawn_command(cmd)
@@ -80,6 +102,7 @@ impl TerminalManager {
         self.sessions.insert(
             terminal_id.clone(),
             PtySession {
+                master: pair.master,
                 writer,
                 _reader_handle: reader_handle,
             },
@@ -101,10 +124,17 @@ impl TerminalManager {
         Ok(())
     }
 
-    pub fn resize(&mut self, _terminal_id: &str, _cols: u16, _rows: u16) -> Result<(), String> {
-        // portable-pty doesn't expose resize on the master directly after creation
-        // This is a limitation - we'd need to store the master handle
-        // For now, acknowledge the resize request
+    pub fn resize(&mut self, terminal_id: &str, cols: u16, rows: u16) -> Result<(), String> {
+        let session = self.sessions.get_mut(terminal_id)
+            .ok_or_else(|| format!("Terminal {} not found", terminal_id))?;
+
+        session.master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        }).map_err(|e| format!("Resize failed: {}", e))?;
+
         Ok(())
     }
 

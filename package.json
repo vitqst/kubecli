@@ -1,18 +1,17 @@
 {
   "name": "kubecli",
-  "productName": "kubecli",
+  "productName": "KubeCLI",
   "version": "1.0.0",
-  "description": "My Electron application description",
-  "main": ".webpack/main",
+  "description": "Desktop application for managing Kubernetes contexts and kubectl commands",
   "scripts": {
-    "dev:frontend": "vite",
-    "build:frontend": "vite build",
-    "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "lint": "echo \"No linting configured\""
+    "dev:frontend": "vite",
+    "build:frontend": "vite build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "tsc --noEmit"
   },
-  "keywords": [],
   "author": {
     "name": "vit",
     "email": "vit@gmail.com"
@@ -20,8 +19,7 @@
   "license": "MIT",
   "dependencies": {
     "@tauri-apps/api": "^2.9.1",
-    "electron-squirrel-startup": "^1.0.1",
-    "node-pty": "^1.1.0-beta17",
+    "@xterm/addon-unicode11": "^0.8.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "xterm": "^5.3.0",
@@ -29,78 +27,17 @@
     "yaml": "^2.6.1"
   },
   "devDependencies": {
-    "@electron-forge/cli": "^7.4.0",
-    "@electron-forge/maker-deb": "^7.4.0",
-    "@electron-forge/maker-rpm": "^7.4.0",
-    "@electron-forge/maker-squirrel": "^7.4.0",
-    "@electron-forge/maker-zip": "^7.4.0",
-    "@electron-forge/plugin-auto-unpack-natives": "^7.4.0",
-    "@electron-forge/plugin-webpack": "^7.4.0",
-    "@electron/rebuild": "^4.0.1",
     "@tauri-apps/cli": "^2.9.6",
-    "@types/node": "^16.18.119",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
+    "@types/node": "^20.0.0",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "@vercel/webpack-asset-relocator-loader": "^1.7.3",
     "@vitejs/plugin-react": "^5.1.2",
-    "css-loader": "^7.1.2",
-    "electron": "^28.3.3",
-    "fork-ts-checker-webpack-plugin": "^9.0.2",
-    "node-loader": "^2.0.0",
-    "style-loader": "^4.0.0",
-    "ts-loader": "^9.5.1",
-    "ts-node": "^10.9.2",
+    "jsdom": "^27.3.0",
     "typescript": "^5.6.3",
-    "vite": "^5.4.21"
-  },
-  "config": {
-    "forge": {
-      "packagerConfig": {
-        "asar": true
-      },
-      "rebuildConfig": {},
-      "makers": [
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        },
-        {
-          "name": "@electron-forge/maker-deb",
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-rpm",
-          "config": {}
-        }
-      ],
-      "plugins": [
-        {
-          "name": "@electron-forge/plugin-webpack",
-          "config": {
-            "mainConfig": "./webpack.main.config.js",
-            "renderer": {
-              "config": "./webpack.renderer.config.js",
-              "entryPoints": [
-                {
-                  "html": "./src/index.html",
-                  "js": "./src/renderer.tsx",
-                  "name": "main_window",
-                  "preload": {
-                    "js": "./src/preload.ts",
-                    "config": "./webpack.preload.config.js"
-                  }
-                }
-              ]
-            }
-          }
-        }
-      ]
-    }
+    "vite": "^5.4.21",
+    "vitest": "^4.0.16"
   }
 }

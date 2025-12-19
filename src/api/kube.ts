@@ -1,28 +1,123 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { KubeConfigSummary, KubectlResult, KubeContext, KubeConfigFile } from '../common/kubeTypes';
 
-export interface ContextInfo {
+// Internal Tauri response types
+interface TauriContextInfo {
   name: string;
   cluster: string;
   user: string;
   namespace: string | null;
 }
 
-export interface KubeConfigSummary {
-  current_context: string;
-  contexts: ContextInfo[];
-  config_path: string;
+interface TauriKubeConfigFile {
+  path: string;
+  name: string;
+  is_default: boolean;
 }
 
+interface TauriKubeConfigSummary {
+  current_context: string;
+  contexts: TauriContextInfo[];
+  config_path: string;
+  available_configs: TauriKubeConfigFile[];
+}
+
+// Convert Tauri response to app's expected format
+function convertSummary(tauri: TauriKubeConfigSummary): KubeConfigSummary {
+  return {
+    currentContext: tauri.current_context,
+    kubeconfigPath: tauri.config_path,
+    contexts: tauri.contexts.map(ctx => ({
+      name: ctx.name,
+      cluster: ctx.cluster,
+      user: ctx.user,
+      namespace: ctx.namespace ?? undefined,
+    })),
+    availableConfigs: tauri.available_configs.map(config => ({
+      path: config.path,
+      name: config.name,
+      isDefault: config.is_default,
+    })),
+  };
+}
+
+// State to track current config path
+let currentConfigPath: string | null = null;
+
 export const kube = {
-  getContexts: (configPath?: string): Promise<KubeConfigSummary> =>
-    invoke<KubeConfigSummary>('get_contexts', { configPath: configPath ?? null }),
+  // Get contexts - matches Electron API
+  getContexts: async (configPath?: string): Promise<KubeConfigSummary> => {
+    const result = await invoke<TauriKubeConfigSummary>('get_contexts', {
+      configPath: configPath ?? null
+    });
+    currentConfigPath = result.config_path;
+    return convertSummary(result);
+  },
 
-  setContext: (configPath: string, contextName: string): Promise<void> =>
-    invoke('set_context', { configPath, contextName }),
+  // Set config file - matches Electron API (returns new summary)
+  setConfig: async (newConfigPath: string): Promise<KubeConfigSummary> => {
+    const result = await invoke<TauriKubeConfigSummary>('get_contexts', {
+      configPath: newConfigPath
+    });
+    currentConfigPath = result.config_path;
+    return convertSummary(result);
+  },
 
-  setNamespace: (configPath: string, context: string, namespace: string): Promise<void> =>
-    invoke('set_namespace', { configPath, context, namespace }),
+  // Set context - matches Electron API (returns new summary)
+  setContext: async (contextName: string): Promise<KubeConfigSummary> => {
+    if (!currentConfigPath) {
+      throw new Error('No kubeconfig loaded');
+    }
+    await invoke('set_context', {
+      configPath: currentConfigPath,
+      contextName
+    });
+    // Reload to get updated summary
+    const result = await invoke<TauriKubeConfigSummary>('get_contexts', {
+      configPath: currentConfigPath
+    });
+    return convertSummary(result);
+  },
 
-  runCommand: (args: string[], configPath?: string): Promise<string> =>
-    invoke<string>('run_kubectl', { args, configPath: configPath ?? null }),
+  // Set namespace - matches Electron API
+  setNamespace: async (context: string, namespace: string): Promise<void> => {
+    if (!currentConfigPath) {
+      throw new Error('No kubeconfig loaded');
+    }
+    await invoke('set_namespace', {
+      configPath: currentConfigPath,
+      context,
+      namespace
+    });
+  },
+
+  // Run kubectl command - matches Electron API (returns result object)
+  runCommand: async (context: string, command: string): Promise<KubectlResult> => {
+    try {
+      // Parse command string into args
+      const args = command.split(/\s+/).filter(Boolean);
+
+      // Add context flag if not already present
+      if (!args.includes('--context')) {
+        args.unshift('--context', context);
+      }
+
+      const stdout = await invoke<string>('run_kubectl', {
+        args,
+        configPath: currentConfigPath ?? null
+      });
+
+      return {
+        stdout,
+        stderr: '',
+        code: 0,
+      };
+    } catch (error) {
+      return {
+        stdout: '',
+        stderr: String(error),
+        code: 1,
+      };
+    }
+  },
 };
