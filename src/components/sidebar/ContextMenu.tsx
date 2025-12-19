@@ -44,6 +44,13 @@ export function ContextMenu({
       }}
       onClick={(e) => e.stopPropagation()}
     >
+      <div style={styles.contextMenuHeader}>
+        <div style={styles.contextMenuTitle}>{resourceName}</div>
+        <div style={styles.contextMenuSubtitle}>
+          {resourceType} · {customNamespace || namespace}
+        </div>
+      </div>
+      <div style={styles.contextMenuDivider} />
       {actions.map((action) => (
         <div
           key={action.id}
@@ -75,8 +82,32 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     padding: '4px 0',
     zIndex: 10000,
-    minWidth: '180px',
+    minWidth: '220px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+  },
+  contextMenuHeader: {
+    padding: '8px 12px 6px 12px',
+  },
+  contextMenuTitle: {
+    color: '#ffffff',
+    fontSize: '13px',
+    fontWeight: 600,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  contextMenuSubtitle: {
+    color: '#9ba3b0',
+    fontSize: '11px',
+    marginTop: '2px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  contextMenuDivider: {
+    height: '1px',
+    backgroundColor: '#3e3e42',
+    margin: '0 0 4px 0',
   },
   contextMenuItem: {
     display: 'flex',
