@@ -15,9 +15,17 @@ export interface CachedResource {
   columns: Record<string, any>;
 }
 
+export interface ResourceLoadingState {
+  status: 'pending' | 'loading' | 'success' | 'error';
+  count?: number;       // Number of items fetched
+  duration?: number;    // Time in milliseconds
+  error?: string;       // Error message if failed
+}
+
 interface ResourceCacheContextType {
   resources: CachedResource[];
   isLoading: boolean;
+  loadingStates: Record<ResourceType, ResourceLoadingState>;
   lastUpdated: Date | null;
   error: string | null;
   search: (query: string) => CachedResource[];
