@@ -2,14 +2,26 @@
 import React from 'react';
 import { Tab } from '../../hooks/useTabs';
 
+/**
+ * Props for the TabBar component
+ */
 interface TabBarProps {
+  /** List of tabs to display */
   tabs: Tab[];
+  /** ID of the currently active tab */
   activeTabId: string;
+  /** Callback when a tab is clicked */
   onTabClick: (id: string) => void;
+  /** Callback when a tab close button is clicked */
   onTabClose: (id: string) => void;
+  /** Callback when the add tab button is clicked */
   onAddTab: () => void;
 }
 
+/**
+ * TabBar component for displaying and managing terminal tabs.
+ * Shows active state, close buttons (except default tab), and an add button.
+ */
 export function TabBar({
   tabs,
   activeTabId,

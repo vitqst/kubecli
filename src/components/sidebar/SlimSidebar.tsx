@@ -3,11 +3,19 @@ import React from 'react';
 import { ResourceType, getAllResources } from '../../resources';
 import { Select } from '../common/Select';
 
+/**
+ * Props for the SlimSidebar component
+ */
 interface SlimSidebarProps {
+  /** Currently selected Kubernetes context */
   selectedContext: string;
+  /** List of available contexts */
   contexts: Array<{ name: string; cluster?: string }>;
+  /** Currently selected resource type */
   selectedResourceType: ResourceType | null;
+  /** Callback when context is changed */
   onContextChange: (context: string) => void;
+  /** Callback when a resource type is clicked */
   onResourceTypeClick: (type: ResourceType) => void;
 }
 
@@ -24,6 +32,10 @@ const RESOURCE_ICONS: Record<ResourceType, string> = {
   ingress: '🚪',
 };
 
+/**
+ * Compact sidebar component for context selection and resource type navigation.
+ * Replaces the full sidebar when using tabbed terminal interface.
+ */
 export function SlimSidebar({
   selectedContext,
   contexts,

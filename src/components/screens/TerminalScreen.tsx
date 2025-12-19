@@ -4,7 +4,7 @@ import { TabBar } from '../tabs/TabBar';
 import { SlimSidebar } from '../sidebar/SlimSidebar';
 import { ResourcePanel } from '../resource-panel/ResourcePanel';
 import { DuplicateTabDialog } from '../tabs/DuplicateTabDialog';
-import { ResourceType, getResourceDefinition } from '../../resources';
+import { ResourceType } from '../../resources';
 import { useTabs, Tab } from '../../hooks/useTabs';
 import { useBottomPanel } from '../../hooks/useBottomPanel';
 
@@ -188,14 +188,17 @@ export function TerminalScreen({
     namespace: string
   ) => {
     // Context menu functionality can be added later if needed
-    console.log('Context menu requested for', resourceType, resourceName);
+    // Intentionally left empty to avoid console output
   }, []);
 
-  // Keyboard shortcuts for tab navigation
+  /**
+   * Global keyboard shortcuts for tab navigation
+   * - Ctrl+Tab / Ctrl+Shift+Tab: cycle tabs
+   * - Ctrl+W: close current tab (except default)
+   * - Ctrl+T: open new blank tab
+   */
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Tab - cycle to next tab
-      // Ctrl+Shift+Tab - cycle to previous tab
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
         const currentIndex = tabs.findIndex(t => t.id === activeTabId);
@@ -205,7 +208,6 @@ export function TerminalScreen({
         setActiveTab(tabs[nextIndex].id);
       }
 
-      // Ctrl+W - close current tab (except default)
       if (e.ctrlKey && e.key === 'w') {
         e.preventDefault();
         if (activeTabId !== 'default') {
@@ -213,7 +215,6 @@ export function TerminalScreen({
         }
       }
 
-      // Ctrl+T - open new blank terminal tab
       if (e.ctrlKey && e.key === 't') {
         e.preventDefault();
         handleAddTab();

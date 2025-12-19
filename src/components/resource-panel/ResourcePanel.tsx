@@ -3,12 +3,21 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ResourceType, getAllResources, getFavoriteActions } from '../../resources';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
 
+/**
+ * Props for the ResourcePanel component
+ */
 interface ResourcePanelProps {
+  /** Whether the panel is currently open */
   isOpen: boolean;
+  /** The currently selected resource type to display */
   selectedResourceType: ResourceType | null;
+  /** The current Kubernetes namespace */
   namespace: string;
+  /** Callback when a resource action is clicked */
   onAction: (actionId: string, resourceType: ResourceType, resourceName: string, namespace: string) => void;
+  /** Callback to show context menu for a resource */
   onShowContextMenu: (x: number, y: number, resourceType: ResourceType, resourceName: string, namespace: string) => void;
+  /** Callback when the panel is closed */
   onClose: () => void;
 }
 
@@ -16,6 +25,10 @@ const MIN_HEIGHT = 100;
 const MAX_HEIGHT_PERCENT = 0.5;
 const DEFAULT_HEIGHT = 200;
 
+/**
+ * Resizable bottom panel component for browsing and interacting with Kubernetes resources.
+ * Includes search, resize handle, inline actions, and a context menu trigger per row.
+ */
 export function ResourcePanel({
   isOpen,
   selectedResourceType,

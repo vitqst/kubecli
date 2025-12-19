@@ -2,6 +2,9 @@
 import { useState, useCallback } from 'react';
 import { ResourceType } from '../resources';
 
+/**
+ * Represents a tab in the terminal interface
+ */
 export interface Tab {
   id: string;
   label: string;
@@ -13,12 +16,21 @@ export interface Tab {
   };
 }
 
+/**
+ * Return type for the useTabs hook
+ */
 interface UseTabsResult {
+  /** List of all tabs */
   tabs: Tab[];
+  /** ID of the currently active tab */
   activeTabId: string;
+  /** Add a new tab and return its ID */
   addTab: (tab: Omit<Tab, 'id'>) => string;
+  /** Close a tab by ID (cannot close default tab) */
   closeTab: (id: string) => void;
+  /** Set the active tab by ID */
   setActiveTab: (id: string) => void;
+  /** Find a tab associated with a specific resource */
   findTabByResource: (type: ResourceType, name: string, namespace: string) => Tab | undefined;
 }
 
@@ -27,6 +39,11 @@ function generateTabId(): string {
   return `tab_${++tabIdCounter}_${Date.now()}`;
 }
 
+/**
+ * Hook for managing tab state in the terminal interface.
+ * Keeps a default tab, tracks the active tab, and provides helpers to add, close, and locate tabs.
+ * @returns Tab state and operations
+ */
 export function useTabs(): UseTabsResult {
   const [tabs, setTabs] = useState<Tab[]>([
     { id: 'default', label: 'Terminal' }

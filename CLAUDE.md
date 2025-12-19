@@ -67,11 +67,17 @@ src/
 │   └── ErrorContext.tsx          # Global error handling
 ├── components/
 │   ├── screens/         # HomeScreen, TerminalScreen
-│   ├── sidebar/         # ResourceList, ConfigurationPanel, GlobalSearch
+│   ├── sidebar/         # ResourceList, ConfigurationPanel, GlobalSearch, SlimSidebar
+│   ├── tabs/            # TabBar, DuplicateTabDialog
+│   ├── resource-panel/  # ResourcePanel
 │   ├── Terminal.tsx     # xterm.js terminal component
 │   └── CommandPalette.tsx  # Ctrl+Shift+P command palette
-└── hooks/
-    └── useResourceCache.ts
+│
+├── hooks/
+│   ├── useResourceCache.ts
+│   ├── useTabs.ts       # Tab state management
+│   └── useBottomPanel.ts  # Bottom panel state management
+└── ...
 
 src-tauri/
 ├── src/

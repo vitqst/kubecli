@@ -1,13 +1,24 @@
 // src/components/tabs/DuplicateTabDialog.tsx
 import React from 'react';
 
+/**
+ * Props for the DuplicateTabDialog component
+ */
 interface DuplicateTabDialogProps {
+  /** Name of the resource that has an existing tab */
   resourceName: string;
+  /** Callback to switch to the existing tab */
   onSwitch: () => void;
+  /** Callback to open a new tab for the same resource */
   onOpenNew: () => void;
+  /** Callback to cancel and close the dialog */
   onCancel: () => void;
 }
 
+/**
+ * Dialog component for handling duplicate tab scenarios.
+ * Shown when user tries to open a tab for a resource that already has one.
+ */
 export function DuplicateTabDialog({
   resourceName,
   onSwitch,
