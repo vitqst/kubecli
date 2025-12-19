@@ -17,6 +17,8 @@ import { podResource } from './pod';
 import { deploymentResource } from './deployment';
 import { cronjobResource } from './cronjob';
 import { serviceResource } from './service';
+import { configMapResource } from './configmap';
+import { secretResource } from './secret';
 
 /**
  * Resource Registry
@@ -27,6 +29,8 @@ const RESOURCES: ResourceDefinition[] = [
   deploymentResource,
   cronjobResource,
   serviceResource,
+  configMapResource,
+  secretResource,
   // Add more resources here as you create them
   // Example: statefulsetResource, daemonsetResource, etc.
 ];
