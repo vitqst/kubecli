@@ -3,10 +3,9 @@ import { Terminal } from '../Terminal';
 import { TabBar } from '../tabs/TabBar';
 import { SlimSidebar } from '../sidebar/SlimSidebar';
 import { ResourcePanel } from '../resource-panel/ResourcePanel';
-import { DuplicateTabDialog } from '../tabs/DuplicateTabDialog';
 import { ContextMenu } from '../sidebar/ContextMenu';
 import { ResourceType } from '../../resources';
-import { useTabs, Tab } from '../../hooks/useTabs';
+import { useTabs } from '../../hooks/useTabs';
 import { useBottomPanel } from '../../hooks/useBottomPanel';
 
 // Memoized Memory Display Component
@@ -82,13 +81,6 @@ interface TerminalScreenProps {
   onGoHome: () => void;
 }
 
-interface PendingAction {
-  actionId: string;
-  resourceType: ResourceType;
-  resourceName: string;
-  namespace: string;
-  existingTab: Tab;
-}
 
 export function TerminalScreen({
   kubeconfigPath,
@@ -115,8 +107,6 @@ export function TerminalScreen({
   // Bottom panel
   const { isOpen: isPanelOpen, selectedResourceType, openPanel, closePanel, togglePanel } = useBottomPanel();
 
-  // Duplicate tab dialog
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   // Memoize env object
   const terminalEnv = useMemo(() => ({
@@ -124,7 +114,7 @@ export function TerminalScreen({
     KUBECTL_NAMESPACE: selectedNamespace
   }), [kubeconfigPath, selectedNamespace]);
 
-  // Handle resource action from panel
+  // Handle resource action: run in the active tab without creating a new one
   const handleResourceAction = useCallback((
     actionId: string,
     resourceType: ResourceType,
@@ -132,50 +122,10 @@ export function TerminalScreen({
     namespace?: string
   ) => {
     const ns = namespace || selectedNamespace;
-
-    // Check if tab already exists
-    const existingTab = findTabByResource(resourceType, resourceName, ns);
-
-    if (existingTab) {
-      // Show duplicate dialog
-      setPendingAction({ actionId, resourceType, resourceName, namespace: ns, existingTab });
-      return;
-    }
-
-    // Create new tab
-    const label = resourceName.length > 20 ? resourceName.substring(0, 17) + '...' : resourceName;
-
-    addTab({
-      label,
-      resourceRef: { type: resourceType, name: resourceName, namespace: ns, action: actionId },
-    });
-
-    // Execute the action in the parent
     onResourceAction(actionId, resourceType, resourceName, ns);
-  }, [findTabByResource, addTab, onResourceAction, selectedNamespace]);
+  }, [onResourceAction, selectedNamespace]);
 
-  // Handle duplicate dialog actions
-  const handleSwitchToTab = useCallback(() => {
-    if (pendingAction) {
-      setActiveTab(pendingAction.existingTab.id);
-      setPendingAction(null);
-    }
-  }, [pendingAction, setActiveTab]);
-
-  const handleOpenNewTab = useCallback(() => {
-    if (pendingAction) {
-      const { actionId, resourceType, resourceName, namespace } = pendingAction;
-      const label = resourceName.length > 20 ? resourceName.substring(0, 17) + '...' : resourceName;
-
-      addTab({
-        label,
-        resourceRef: { type: resourceType, name: resourceName, namespace, action: actionId },
-      });
-
-      onResourceAction(actionId, resourceType, resourceName, namespace);
-      setPendingAction(null);
-    }
-  }, [pendingAction, addTab, onResourceAction]);
+  // Duplicate dialog is no longer needed (no new tabs on action)
 
   // Add new blank tab
   const handleAddTab = useCallback(() => {
@@ -319,16 +269,6 @@ export function TerminalScreen({
           </div>
         </div>
       </div>
-
-      {/* Duplicate Tab Dialog */}
-      {pendingAction && (
-        <DuplicateTabDialog
-          resourceName={pendingAction.resourceName}
-          onSwitch={handleSwitchToTab}
-          onOpenNew={handleOpenNewTab}
-          onCancel={() => setPendingAction(null)}
-        />
-      )}
 
       {/* Resource Context Menu */}
       {contextMenu && (
