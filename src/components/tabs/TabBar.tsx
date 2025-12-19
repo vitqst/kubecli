@@ -39,6 +39,7 @@ export function TabBar({
             ...(tab.id === activeTabId ? styles.activeTab : {}),
           }}
           onClick={() => onTabClick(tab.id)}
+          title={tab.label}
         >
           <span style={styles.tabLabel}>{tab.label}</span>
           {tab.id !== 'default' && (
