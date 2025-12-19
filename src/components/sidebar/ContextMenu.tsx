@@ -83,8 +83,9 @@ export function ContextMenu({
             e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
-          <span style={styles.contextMenuIcon}>{action.isFavorite ? '★' : action.icon}</span>
+          <span style={styles.contextMenuIcon}>{action.icon}</span>
           <span style={styles.contextMenuLabel}>{action.label}</span>
+          {action.isFavorite && <span style={styles.contextMenuStar}>★</span>}
         </div>
       ))}
     </div>
@@ -150,6 +151,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   contextMenuLabel: {
     flex: 1,
+  },
+  contextMenuStar: {
+    marginLeft: '8px',
+    color: '#ffd166',
+    fontSize: '12px',
   },
   contextMenuEmpty: {
     padding: '6px 12px',
