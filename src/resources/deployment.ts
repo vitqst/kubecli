@@ -3,7 +3,66 @@
  * Independent file containing all deployment-specific actions
  */
 
-import { ResourceDefinition, ResourceAction, kubectl } from './types';
+import { ResourceDefinition, ResourceAction, kubectl, ColumnDefinition } from './types';
+
+/**
+ * Helper to format age from timestamp
+ */
+function formatAge(timestamp: string): string {
+  if (!timestamp) return '-';
+  const created = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - created.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays > 0) return `${diffDays}d`;
+  if (diffHours > 0) return `${diffHours}h`;
+  if (diffMins > 0) return `${diffMins}m`;
+  return `${diffSecs}s`;
+}
+
+/**
+ * Column definitions for deployments - matches kubectl get deployments -A output
+ */
+const deploymentColumns: ColumnDefinition[] = [
+  { key: 'namespace', label: 'NAMESPACE', path: '.metadata.namespace', flex: 1 },
+  { key: 'name', label: 'NAME', path: '.metadata.name', flex: 2 },
+  {
+    key: 'ready',
+    label: 'READY',
+    path: '.status',
+    flex: 0.5,
+    transform: (status: any) => {
+      const ready = status?.readyReplicas || 0;
+      const desired = status?.replicas || 0;
+      return `${ready}/${desired}`;
+    },
+  },
+  {
+    key: 'upToDate',
+    label: 'UP-TO-DATE',
+    path: '.status.updatedReplicas',
+    flex: 0.7,
+    transform: (val: number | null) => String(val ?? 0),
+  },
+  {
+    key: 'available',
+    label: 'AVAILABLE',
+    path: '.status.availableReplicas',
+    flex: 0.7,
+    transform: (val: number | null) => String(val ?? 0),
+  },
+  {
+    key: 'age',
+    label: 'AGE',
+    path: '.metadata.creationTimestamp',
+    flex: 0.5,
+    transform: formatAge,
+  },
+];
 
 const viewAction: ResourceAction = {
   id: 'view',
@@ -116,6 +175,7 @@ export const deploymentResource: ResourceDefinition = {
   type: 'deployment',
   displayName: 'Deployment',
   pluralName: 'Deployments',
+  columns: deploymentColumns,
   getActions: () => [
     viewAction,
     describeAction,

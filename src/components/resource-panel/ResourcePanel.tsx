@@ -1,6 +1,6 @@
 // src/components/resource-panel/ResourcePanel.tsx
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ResourceType, getAllResources, getFavoriteActions } from '../../resources';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { ResourceType, getAllResources, getResourceDefinition } from '../../resources';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
 
 /**
@@ -126,8 +126,10 @@ export function ResourcePanel({
 
   if (!isOpen || !selectedResourceType) return null;
 
-  const resourceDef = getAllResources().find(r => r.type === selectedResourceType);
+  const resourceDef = getResourceDefinition(selectedResourceType);
   const title = resourceDef?.pluralName || selectedResourceType;
+  const columns = resourceDef?.columns || [];
+  const gridTemplate = columns.map(col => `${col.flex}fr`).join(' ');
   const isAllNamespaces = selectedNamespaces.length === 0;
   const selectedLabel = isAllNamespaces ? 'All' : selectedNamespaces.join(', ');
 
@@ -205,18 +207,12 @@ export function ResourcePanel({
           </div>
         ) : (
           <>
-            <div style={styles.tableHeader}>
-              <span style={styles.colName}>Name</span>
-              <span style={styles.colNamespace}>Namespace</span>
-              <span style={styles.colActions}>Actions</span>
+            <div style={{ ...styles.tableHeader, gridTemplateColumns: gridTemplate }}>
+              {columns.map(col => (
+                <span key={col.key} style={styles.colHeader}>{col.label}</span>
+              ))}
             </div>
             {filteredResources.map(resource => {
-              const context = {
-                resourceName: resource.name,
-                namespace: resource.namespace,
-                resourceType: selectedResourceType,
-              };
-              const actions = getFavoriteActions(selectedResourceType, context);
               const rowKey = `${resource.namespace}/${resource.name}`;
               const isHovered = hoveredRow === rowKey;
 
@@ -225,6 +221,7 @@ export function ResourcePanel({
                   key={rowKey}
                   style={{
                     ...styles.row,
+                    gridTemplateColumns: gridTemplate,
                     backgroundColor: isHovered ? '#2a2d2e' : 'transparent',
                   }}
                   onMouseEnter={() => setHoveredRow(rowKey)}
@@ -239,29 +236,17 @@ export function ResourcePanel({
                       resource.namespace
                     );
                   }}
+                  onClick={() => onAction('describe', selectedResourceType, resource.name, resource.namespace)}
                 >
-                  <span
-                    style={styles.resourceName}
-                    onClick={() => onAction('describe', selectedResourceType, resource.name, resource.namespace)}
-                  >
-                    {resource.name}
-                  </span>
-                  <span style={styles.resourceNamespace}>{resource.namespace}</span>
-                  <div style={styles.actions}>
-                    {actions.slice(0, 3).map(action => (
-                      <button
-                        key={action.id}
-                        style={{
-                          ...styles.actionButton,
-                          ...(isHovered ? styles.actionButtonHover : {}),
-                        }}
-                        onClick={() => onAction(action.id, selectedResourceType, resource.name, resource.namespace)}
-                        title={action.description}
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
+                  {columns.map(col => {
+                    const rawValue = resource.columns[col.key];
+                    const displayValue = col.transform ? col.transform(rawValue) : (rawValue ?? '-');
+                    return (
+                      <span key={col.key} style={styles.cell}>
+                        {String(displayValue)}
+                      </span>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -347,10 +332,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     cursor: 'pointer',
   },
-  actionButtonHover: {
-    backgroundColor: '#094771',
-    color: '#ffffff',
-  },
   list: {
     flex: 1,
     overflowY: 'auto',
@@ -403,58 +384,30 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tableHeader: {
     display: 'grid',
-    gridTemplateColumns: '2fr 1fr auto',
     padding: '6px 12px',
     color: '#858585',
     fontSize: '11px',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
+    borderBottom: '1px solid #3e3e42',
   },
-  colName: {
+  colHeader: {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  colNamespace: {
-    textAlign: 'left',
-  },
-  colActions: {
-    textAlign: 'right',
-  },
   row: {
     display: 'grid',
-    gridTemplateColumns: '2fr 1fr auto',
     alignItems: 'center',
     gap: '8px',
     padding: '6px 12px',
     cursor: 'pointer',
   },
-  resourceName: {
+  cell: {
     fontSize: '12px',
     color: '#cccccc',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-  },
-  resourceNamespace: {
-    fontSize: '12px',
-    color: '#aaaaaa',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  actions: {
-    display: 'flex',
-    gap: '4px',
-    justifyContent: 'flex-end',
-  },
-  actionButton: {
-    padding: '2px 8px',
-    fontSize: '11px',
-    backgroundColor: '#3c3c3c',
-    border: '1px solid #3e3e42',
-    borderRadius: '3px',
-    color: '#cccccc',
-    cursor: 'pointer',
   },
 };

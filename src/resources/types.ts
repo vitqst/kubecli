@@ -3,17 +3,33 @@
  * This file contains only type definitions - no implementations
  */
 
-export type ResourceType = 
-  | 'pod' 
-  | 'deployment' 
-  | 'service' 
-  | 'job' 
-  | 'cronjob' 
-  | 'statefulset' 
+export type ResourceType =
+  | 'pod'
+  | 'deployment'
+  | 'service'
+  | 'job'
+  | 'cronjob'
+  | 'statefulset'
   | 'daemonset'
   | 'configmap'
   | 'secret'
   | 'ingress';
+
+/**
+ * Column definition for displaying resource data in ResourcePanel
+ */
+export interface ColumnDefinition {
+  /** Unique identifier for this column */
+  key: string;
+  /** Header text displayed in the table */
+  label: string;
+  /** kubectl JSON path to extract the value (e.g., '.metadata.name') */
+  path: string;
+  /** CSS grid flex value (fr units) for column width */
+  flex: number;
+  /** Optional transform function to format the raw value for display */
+  transform?: (value: any) => string;
+}
 
 export interface ResourceActionContext {
   resourceName: string;
@@ -98,6 +114,10 @@ export interface ResourceDefinition {
    * kubectl resource name (usually singular, but can be plural like 'cronjobs')
    */
   kubectlName?: string;
+  /**
+   * Column definitions for displaying this resource in ResourcePanel
+   */
+  columns: ColumnDefinition[];
   /**
    * Get all available actions for this resource
    */

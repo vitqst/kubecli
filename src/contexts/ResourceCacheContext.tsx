@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { ResourceType } from '../resources';
+import { ResourceType, getResourceDefinition } from '../resources';
 import { useError } from './ErrorContext';
 import { kube } from '../api';
 
@@ -7,9 +7,12 @@ export interface CachedResource {
   type: ResourceType;
   name: string;
   namespace: string;
+  /** Legacy status field for backward compatibility */
   status: string;
+  /** Legacy info field for backward compatibility */
   info: string;
-  raw?: any;
+  /** Raw column values extracted from JSON, keyed by column key */
+  columns: Record<string, any>;
 }
 
 interface ResourceCacheContextType {
@@ -92,150 +95,123 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
 
     console.log(`[ResourceCache] ${new Date().toISOString()} Starting parallel fetch for ${cacheKey}`);
 
+    /**
+     * Helper to extract a value from an object using a JSON path like '.metadata.name'
+     */
+    const getValueByPath = (obj: any, path: string): any => {
+      if (!path || !obj) return undefined;
+      // Remove leading dot
+      const cleanPath = path.startsWith('.') ? path.slice(1) : path;
+      const parts = cleanPath.split('.');
+      let value = obj;
+      for (const part of parts) {
+        if (value === undefined || value === null) return undefined;
+        value = value[part];
+      }
+      return value;
+    };
+
+    /**
+     * Process JSON output and extract column values for a resource type
+     */
+    const processJsonOutput = (
+      jsonStr: string,
+      resourceType: ResourceType
+    ): CachedResource[] => {
+      const results: CachedResource[] = [];
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const items = parsed.items || [];
+        const resourceDef = getResourceDefinition(resourceType);
+        const columns = resourceDef?.columns || [];
+
+        for (const item of items) {
+          const columnValues: Record<string, any> = {};
+
+          for (const col of columns) {
+            columnValues[col.key] = getValueByPath(item, col.path);
+          }
+
+          // Generate legacy status and info fields for backward compatibility
+          let status = 'Unknown';
+          let info = String(resourceType);
+
+          if (resourceType === 'pod') {
+            status = item.status?.phase || 'Unknown';
+            const statuses = item.status?.containerStatuses || [];
+            const ready = statuses.filter((s: any) => s?.ready).length;
+            info = `Pod | ${status} | ${ready}/${statuses.length}`;
+          } else if (resourceType === 'deployment') {
+            status = 'Active';
+            const ready = item.status?.readyReplicas || 0;
+            const desired = item.status?.replicas || 0;
+            info = `Deployment | ${ready}/${desired}`;
+          } else if (resourceType === 'cronjob') {
+            status = item.spec?.suspend ? 'Suspended' : 'Active';
+            const schedule = item.spec?.schedule || '';
+            info = `CronJob | ${schedule}`;
+          } else if (resourceType === 'service') {
+            const svcType = item.spec?.type || 'ClusterIP';
+            status = svcType;
+            const clusterIP = item.spec?.clusterIP || 'N/A';
+            info = `Service | ${svcType} | ${clusterIP}`;
+          } else if (resourceType === 'configmap') {
+            status = 'Available';
+            info = 'ConfigMap';
+          } else if (resourceType === 'secret') {
+            const secretType = item.type || 'Opaque';
+            status = secretType;
+            info = `Secret | ${secretType}`;
+          }
+
+          results.push({
+            type: resourceType,
+            name: item.metadata?.name || '',
+            namespace: item.metadata?.namespace || '',
+            status,
+            info,
+            columns: columnValues,
+          });
+        }
+      } catch (e) {
+        console.error(`[ResourceCache] Failed to parse ${resourceType} JSON:`, e);
+      }
+      return results;
+    };
+
     try {
-      // Run ALL kubectl commands in PARALLEL
+      // Run ALL kubectl commands in PARALLEL using JSON output
       const [podsResult, deploymentsResult, cronjobsResult, servicesResult, configMapsResult, secretsResult] = await Promise.all([
-        kube.runCommand(
-          selectedContext,
-          'get pods -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount'
-        ),
-        kube.runCommand(
-          selectedContext,
-          'get deployments -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,READY:.status.readyReplicas,DESIRED:.spec.replicas'
-        ),
-        kube.runCommand(
-          selectedContext,
-          'get cronjobs -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,SCHEDULE:.spec.schedule,SUSPEND:.spec.suspend'
-        ),
-        kube.runCommand(
-          selectedContext,
-          'get services -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.spec.type,CLUSTER-IP:.spec.clusterIP'
-        ),
-        kube.runCommand(
-          selectedContext,
-          'get configmaps -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name'
-        ),
-        kube.runCommand(
-          selectedContext,
-          'get secrets -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.type'
-        ),
+        kube.runCommand(selectedContext, 'get pods -A -o json'),
+        kube.runCommand(selectedContext, 'get deployments -A -o json'),
+        kube.runCommand(selectedContext, 'get cronjobs -A -o json'),
+        kube.runCommand(selectedContext, 'get services -A -o json'),
+        kube.runCommand(selectedContext, 'get configmaps -A -o json'),
+        kube.runCommand(selectedContext, 'get secrets -A -o json'),
       ]);
 
       console.log(`[ResourceCache] ${new Date().toISOString()} All parallel fetches completed`);
 
       const allResources: CachedResource[] = [];
 
-      // Process pods
+      // Process each resource type
       if (podsResult.code === 0 && podsResult.stdout) {
-        const lines = podsResult.stdout.trim().split('\n').filter(line => line.trim());
-        lines.forEach(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 3) {
-            const [namespace, name, status, readyStr] = parts;
-            const readyArr = readyStr?.split(',').filter(r => r === 'true') || [];
-            const totalArr = readyStr?.split(',') || [];
-            const ready = `${readyArr.length}/${totalArr.length}`;
-
-            allResources.push({
-              type: 'pod',
-              name,
-              namespace,
-              status,
-              info: `Pod | ${status} | ${ready}`,
-            });
-          }
-        });
+        allResources.push(...processJsonOutput(podsResult.stdout, 'pod'));
       }
-
-      // Process deployments
       if (deploymentsResult.code === 0 && deploymentsResult.stdout) {
-        const lines = deploymentsResult.stdout.trim().split('\n').filter(line => line.trim());
-        lines.forEach(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 3) {
-            const [namespace, name, ready, desired] = parts;
-            allResources.push({
-              type: 'deployment',
-              name,
-              namespace,
-              status: 'Active',
-              info: `Deployment | ${ready || 0}/${desired || 0}`,
-            });
-          }
-        });
+        allResources.push(...processJsonOutput(deploymentsResult.stdout, 'deployment'));
       }
-
-      // Process cronjobs
       if (cronjobsResult.code === 0 && cronjobsResult.stdout) {
-        const lines = cronjobsResult.stdout.trim().split('\n').filter(line => line.trim());
-        lines.forEach(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 3) {
-            const [namespace, name, schedule, suspend] = parts;
-            const status = suspend === 'true' ? 'Suspended' : 'Active';
-            allResources.push({
-              type: 'cronjob',
-              name,
-              namespace,
-              status,
-              info: `CronJob | ${schedule}`,
-            });
-          }
-        });
+        allResources.push(...processJsonOutput(cronjobsResult.stdout, 'cronjob'));
       }
-
-      // Process services
       if (servicesResult.code === 0 && servicesResult.stdout) {
-        const lines = servicesResult.stdout.trim().split('\n').filter(line => line.trim());
-        lines.forEach(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 3) {
-            const [namespace, name, type, clusterIP] = parts;
-            allResources.push({
-              type: 'service',
-              name,
-              namespace,
-              status: type || 'ClusterIP',
-              info: `Service | ${type} | ${clusterIP || 'N/A'}`,
-            });
-          }
-        });
+        allResources.push(...processJsonOutput(servicesResult.stdout, 'service'));
       }
-
-      // Process configmaps
       if (configMapsResult.code === 0 && configMapsResult.stdout) {
-        const lines = configMapsResult.stdout.trim().split('\n').filter(line => line.trim());
-        lines.forEach(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 2) {
-            const [namespace, name] = parts;
-            allResources.push({
-              type: 'configmap',
-              name,
-              namespace,
-              status: 'Available',
-              info: 'ConfigMap',
-            });
-          }
-        });
+        allResources.push(...processJsonOutput(configMapsResult.stdout, 'configmap'));
       }
-
-      // Process secrets
       if (secretsResult.code === 0 && secretsResult.stdout) {
-        const lines = secretsResult.stdout.trim().split('\n').filter(line => line.trim());
-        lines.forEach(line => {
-          const parts = line.split(/\s+/);
-          if (parts.length >= 3) {
-            const [namespace, name, type] = parts;
-            allResources.push({
-              type: 'secret',
-              name,
-              namespace,
-              status: type || 'Secret',
-              info: `Secret | ${type || 'Opaque'}`,
-            });
-          }
-        });
+        allResources.push(...processJsonOutput(secretsResult.stdout, 'secret'));
       }
 
       const now = new Date();
@@ -301,7 +277,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     console.log(`[ResourceCache] ${new Date().toISOString()} useEffect triggered for ${cacheKey}`);
 
     // Check each resource type separately
-    const resourceTypes: ResourceType[] = ['pod', 'deployment', 'cronjob', 'service'];
+    const resourceTypes: ResourceType[] = ['pod', 'deployment', 'cronjob', 'service', 'configmap', 'secret'];
     const cachedResources: CachedResource[] = [];
     let needsFetch = false;
     let latestUpdate: Date | null = null;

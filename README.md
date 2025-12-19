@@ -35,6 +35,7 @@ npm run dev
 ## Build
 
 ```bash
+sudo apt install librsvg2-dev
 npm run build
 ```
 

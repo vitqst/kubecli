@@ -1,12 +1,68 @@
 /**
  * CronJob Resource Definition
  * Independent file containing all cronjob-specific actions
- * 
+ *
  * Note: CronJobs in TerminalSidebar are stored as "namespace/name"
  * so we use kubectlWithNs() helper which doesn't add -n flag
  */
 
-import { ResourceDefinition, ResourceAction, kubectl } from './types';
+import { ResourceDefinition, ResourceAction, kubectl, ColumnDefinition } from './types';
+
+/**
+ * Helper to format age from timestamp
+ */
+function formatAge(timestamp: string): string {
+  if (!timestamp) return '-';
+  const created = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - created.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays > 0) return `${diffDays}d`;
+  if (diffHours > 0) return `${diffHours}h`;
+  if (diffMins > 0) return `${diffMins}m`;
+  return `${diffSecs}s`;
+}
+
+/**
+ * Column definitions for cronjobs - matches kubectl get cronjobs -A output
+ */
+const cronjobColumns: ColumnDefinition[] = [
+  { key: 'namespace', label: 'NAMESPACE', path: '.metadata.namespace', flex: 1 },
+  { key: 'name', label: 'NAME', path: '.metadata.name', flex: 2 },
+  { key: 'schedule', label: 'SCHEDULE', path: '.spec.schedule', flex: 1 },
+  {
+    key: 'suspend',
+    label: 'SUSPEND',
+    path: '.spec.suspend',
+    flex: 0.5,
+    transform: (val: boolean | null) => val ? 'True' : 'False',
+  },
+  {
+    key: 'active',
+    label: 'ACTIVE',
+    path: '.status.active',
+    flex: 0.5,
+    transform: (val: any[] | null) => String(val?.length ?? 0),
+  },
+  {
+    key: 'lastSchedule',
+    label: 'LAST SCHEDULE',
+    path: '.status.lastScheduleTime',
+    flex: 0.8,
+    transform: formatAge,
+  },
+  {
+    key: 'age',
+    label: 'AGE',
+    path: '.metadata.creationTimestamp',
+    flex: 0.5,
+    transform: formatAge,
+  },
+];
 
 const viewAction: ResourceAction = {
   id: 'view',
@@ -84,6 +140,7 @@ export const cronjobResource: ResourceDefinition = {
   displayName: 'CronJob',
   pluralName: 'CronJobs',
   kubectlName: 'cronjobs',  // kubectl uses plural form
+  columns: cronjobColumns,
   getActions: () => [
     viewAction,
     describeAction,

@@ -3,7 +3,64 @@
  * Independent file containing all pod-specific actions
  */
 
-import { ResourceDefinition, ResourceAction, ResourceActionContext, kubectl } from './types';
+import { ResourceDefinition, ResourceAction, ResourceActionContext, kubectl, ColumnDefinition } from './types';
+
+/**
+ * Helper to format age from timestamp
+ */
+function formatAge(timestamp: string): string {
+  if (!timestamp) return '-';
+  const created = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - created.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays > 0) return `${diffDays}d`;
+  if (diffHours > 0) return `${diffHours}h`;
+  if (diffMins > 0) return `${diffMins}m`;
+  return `${diffSecs}s`;
+}
+
+/**
+ * Column definitions for pods - matches kubectl get pods -A output
+ */
+const podColumns: ColumnDefinition[] = [
+  { key: 'namespace', label: 'NAMESPACE', path: '.metadata.namespace', flex: 1 },
+  { key: 'name', label: 'NAME', path: '.metadata.name', flex: 2 },
+  {
+    key: 'ready',
+    label: 'READY',
+    path: '.status.containerStatuses',
+    flex: 0.5,
+    transform: (statuses: any[] | null) => {
+      if (!statuses || !Array.isArray(statuses)) return '0/0';
+      const ready = statuses.filter(s => s?.ready).length;
+      return `${ready}/${statuses.length}`;
+    },
+  },
+  { key: 'status', label: 'STATUS', path: '.status.phase', flex: 0.7 },
+  {
+    key: 'restarts',
+    label: 'RESTARTS',
+    path: '.status.containerStatuses',
+    flex: 0.6,
+    transform: (statuses: any[] | null) => {
+      if (!statuses || !Array.isArray(statuses)) return '0';
+      const total = statuses.reduce((sum, s) => sum + (s?.restartCount || 0), 0);
+      return String(total);
+    },
+  },
+  {
+    key: 'age',
+    label: 'AGE',
+    path: '.metadata.creationTimestamp',
+    flex: 0.5,
+    transform: formatAge,
+  },
+];
 
 // Pod-specific actions
 const viewAction: ResourceAction = {
@@ -118,6 +175,7 @@ export const podResource: ResourceDefinition = {
   type: 'pod',
   displayName: 'Pod',
   pluralName: 'Pods',
+  columns: podColumns,
   getActions: () => [
     viewAction,
     describeAction,
