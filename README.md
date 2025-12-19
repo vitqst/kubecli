@@ -10,6 +10,8 @@ A desktop application for managing Kubernetes contexts and running kubectl comma
 - **Command Palette**: Ctrl+Shift+P for quick actions
 - **Embedded Terminal**: Full PTY terminal with xterm.js
 - **Resource Actions**: Quick actions for pods, deployments, services, cronjobs
+- **Multi-Resource Tabs**: Open multiple terminals per resource with duplicate tab handling and shortcuts (Ctrl+Tab, Ctrl+Shift+Tab, Ctrl+T, Ctrl+W)
+- **Slim Sidebar + Bottom Panel**: Context selector plus resource filter that opens a resizable, searchable panel with inline and context menu actions
 
 ## Prerequisites
 

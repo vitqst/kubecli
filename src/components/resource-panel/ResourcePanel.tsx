@@ -161,6 +161,16 @@ export function ResourcePanel({
                 }}
                 onMouseEnter={() => setHoveredRow(rowKey)}
                 onMouseLeave={() => setHoveredRow(null)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onShowContextMenu(
+                    e.clientX,
+                    e.clientY,
+                    selectedResourceType,
+                    resource.name,
+                    resource.namespace
+                  );
+                }}
               >
                 <span
                   style={styles.resourceName}
@@ -182,26 +192,6 @@ export function ResourcePanel({
                       {action.label}
                     </button>
                   ))}
-                  <button
-                    style={{
-                      ...styles.moreButton,
-                      ...(isHovered ? styles.moreButtonHover : {}),
-                    }}
-                    title="More actions"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onShowContextMenu(
-                        e.clientX,
-                        e.clientY,
-                        selectedResourceType,
-                        resource.name,
-                        resource.namespace
-                      );
-                    }}
-                  >
-                    ⋮
-                  </button>
                 </div>
               </div>
             );
