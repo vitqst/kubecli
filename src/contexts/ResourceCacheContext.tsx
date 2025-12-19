@@ -118,7 +118,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   const fetchResources = useCallback(async () => {
     if (!selectedContext) return;
 
-    console.log(`[ResourceCache] ${new Date().toISOString()} Starting parallel fetch for ${cacheKey}`);
     setError(null);
 
     // Reset fetched types to loading (only the 6 we actually fetch)
@@ -220,25 +219,16 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
      */
     const fetchOne = async (type: ResourceType, command: string): Promise<CachedResource[]> => {
       const start = Date.now();
-      console.log(`[ResourceCache] [${type}] Starting fetch...`);
       try {
-        const cmdStart = Date.now();
         const result = await kube.runCommand(selectedContext, command);
-        const cmdDuration = Date.now() - cmdStart;
-        console.log(`[ResourceCache] [${type}] kubectl command completed in ${cmdDuration}ms, stdout size: ${result.stdout?.length || 0} bytes`);
 
         if (result.code === 0 && result.stdout) {
-          const parseStart = Date.now();
           const resources = processJsonOutput(result.stdout, type);
-          const parseDuration = Date.now() - parseStart;
-          console.log(`[ResourceCache] [${type}] JSON parsing + processing took ${parseDuration}ms for ${resources.length} items`);
-
           const duration = Date.now() - start;
           setLoadingStates(prev => ({
             ...prev,
             [type]: { status: 'success', count: resources.length, duration }
           }));
-          console.log(`[ResourceCache] ✓ ${type}: ${resources.length} items (total: ${duration}ms, cmd: ${cmdDuration}ms, parse: ${parseDuration}ms)`);
           return resources;
         } else {
           const errorMsg = result.stderr || 'Unknown error';
@@ -273,7 +263,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         fetchOne('secret', 'get secrets -A -o json'),
       ]);
 
-      console.log(`[ResourceCache] ${new Date().toISOString()} All parallel fetches completed`);
 
       const allResources = results.flat();
       const now = new Date();
@@ -301,7 +290,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
 
       setResources(allResources);
       setLastUpdated(now);
-      console.log(`[ResourceCache] Cached ${allResources.length} total resources for ${cacheKey}`);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch resources';
       console.error('[ResourceCache] Failed to fetch resources:', err);
@@ -330,7 +318,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   useEffect(() => {
     if (!selectedContext) return;
 
-    console.log(`[ResourceCache] ${new Date().toISOString()} useEffect triggered for ${cacheKey}`);
 
     // Check each resource type separately
     const resourceTypes: ResourceType[] = ['pod', 'deployment', 'cronjob', 'service', 'configmap', 'secret'];
@@ -348,11 +335,9 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         if (!latestUpdate || cached.lastUpdated > latestUpdate) {
           latestUpdate = cached.lastUpdated;
         }
-        console.log(`[ResourceCache] ${new Date().toISOString()} Loaded ${cached.resources.length} ${type}s from cache`);
       } else {
         // No cache or expired - need to fetch
         if (cached) {
-          console.log(`[ResourceCache] ${new Date().toISOString()} Cache expired for ${type}s, will refresh`);
         }
         needsFetch = true;
       }
@@ -362,16 +347,13 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
       // All types cached and valid - use cache
       setResources(cachedResources);
       setLastUpdated(latestUpdate);
-      console.log(`[ResourceCache] ${new Date().toISOString()} Using ${cachedResources.length} cached resources`);
     } else if (cachedResources.length > 0 && needsFetch) {
       // Some cached, some need fetch - show cached first, then fetch
       setResources(cachedResources);
       setLastUpdated(latestUpdate);
-      console.log(`[ResourceCache] ${new Date().toISOString()} Loaded ${cachedResources.length} cached, fetching fresh...`);
       fetchResources();
     } else {
       // No cache at all - fetch fresh data
-      console.log(`[ResourceCache] ${new Date().toISOString()} No cache, fetching fresh data...`);
       fetchResources();
     }
   }, [selectedContext, cacheKey, fetchResources]);
@@ -436,7 +418,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
 
   // Refresh specific resource type
   const refreshType = useCallback((type: ResourceType) => {
-    console.log(`[ResourceCache] Refreshing ${type}s for ${cacheKey}`);
     // Invalidate cache for this type
     const typedCacheKey = `${cacheKey}::${type}`;
     cacheStorage.delete(typedCacheKey);
