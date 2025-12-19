@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PromptField, ResourceActionContext } from '../resources/types';
+import { Select } from './common/Select';
 
 interface ActionPromptDialogProps {
   title: string;
@@ -142,20 +143,13 @@ export function ActionPromptDialog({
                       />
                     )}
                     {prompt.type === 'select' && prompt.options && (
-                      <select
-                        id={prompt.name}
+                      <Select
                         value={values[prompt.name] || ''}
-                        onChange={(e) => handleChange(prompt.name, e.target.value)}
+                        onChange={(value) => handleChange(prompt.name, value)}
+                        options={prompt.options}
+                        placeholder="Select..."
                         required={prompt.required}
-                        style={styles.select}
-                      >
-                        <option value="">Select...</option>
-                        {prompt.options.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     )}
                   </div>
                 ))
@@ -242,17 +236,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     color: '#cccccc',
     outline: 'none',
-  },
-  select: {
-    width: '100%',
-    padding: '8px 12px',
-    fontSize: '14px',
-    backgroundColor: '#3c3c3c',
-    border: '1px solid #3e3e42',
-    borderRadius: '4px',
-    color: '#cccccc',
-    outline: 'none',
-    cursor: 'pointer',
   },
   loading: {
     padding: '20px',

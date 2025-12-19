@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { QuickCommand, getCommandsWithRecent, getRecentCommandIds } from '../commands/quickCommands';
+import { Select } from './common/Select';
 
 interface KubectlPaletteProps {
   isOpen: boolean;
@@ -177,15 +178,15 @@ export function KubectlPalette({
               {selectedCommand.namespaced && (
                 <div style={styles.namespaceField}>
                   <label style={styles.namespaceLabel}>Namespace:</label>
-                  <select
+                  <Select
                     value={previewNamespace}
-                    onChange={(e) => setPreviewNamespace(e.target.value)}
-                    style={styles.namespaceSelect}
-                  >
-                    {namespaces.map(ns => (
-                      <option key={ns} value={ns}>{ns}</option>
-                    ))}
-                  </select>
+                    onChange={setPreviewNamespace}
+                    options={namespaces.map(ns => ({
+                      value: ns,
+                      label: ns,
+                    }))}
+                    style={{ flex: 1 }}
+                  />
                 </div>
               )}
             </div>
@@ -437,17 +438,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     color: '#cccccc',
     fontWeight: 500,
-  },
-  namespaceSelect: {
-    flex: 1,
-    padding: '8px 12px',
-    fontSize: '14px',
-    backgroundColor: '#3c3c3c',
-    border: '1px solid #3e3e42',
-    borderRadius: '4px',
-    color: '#cccccc',
-    outline: 'none',
-    cursor: 'pointer',
   },
   previewFooter: {
     display: 'flex',

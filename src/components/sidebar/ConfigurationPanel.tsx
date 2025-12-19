@@ -1,4 +1,5 @@
 import React from 'react';
+import { Select } from '../common/Select';
 
 interface ConfigurationPanelProps {
   kubeconfigPath: string;
@@ -33,19 +34,16 @@ export function ConfigurationPanel({
       {availableConfigs.length > 1 && (
         <div style={styles.section}>
           <div style={styles.sectionTitle}>Kubeconfig File</div>
-          <select
+          <Select
             value={kubeconfigPath}
-            onChange={(e) => onConfigChange(e.target.value)}
-            style={isInEditMode ? {...styles.select, ...styles.disabledSelect} : styles.select}
+            onChange={onConfigChange}
+            options={availableConfigs.map((config) => ({
+              value: config.path,
+              label: `${config.name}${config.isDefault ? ' (default)' : ''}`,
+            }))}
             disabled={isInEditMode}
             title={isInEditMode ? 'Cannot change config while in edit mode' : ''}
-          >
-            {availableConfigs.map((config) => (
-              <option key={config.path} value={config.path}>
-                {config.name} {config.isDefault ? '(default)' : ''}
-              </option>
-            ))}
-          </select>
+          />
           <div style={styles.hint}>
             {kubeconfigPath.split('/').pop()}
           </div>
@@ -57,19 +55,16 @@ export function ConfigurationPanel({
         <div style={styles.sectionTitle}>Context</div>
         {contexts.length > 0 ? (
           <>
-            <select
+            <Select
               value={selectedContext}
-              onChange={(e) => onContextChange(e.target.value)}
-              style={isInEditMode ? {...styles.select, ...styles.disabledSelect} : styles.select}
+              onChange={onContextChange}
+              options={contexts.map((ctx) => ({
+                value: ctx.name,
+                label: ctx.name,
+              }))}
               disabled={isInEditMode}
               title={isInEditMode ? 'Cannot change context while in edit mode' : ''}
-            >
-              {contexts.map((ctx) => (
-                <option key={ctx.name} value={ctx.name}>
-                  {ctx.name}
-                </option>
-              ))}
-            </select>
+            />
             <div style={styles.hint}>
               Cluster: {contexts.find(c => c.name === selectedContext)?.cluster || 'N/A'}
             </div>
@@ -86,19 +81,16 @@ export function ConfigurationPanel({
           <div style={styles.loading}>Loading...</div>
         ) : namespaces.length > 0 ? (
           <>
-            <select
+            <Select
               value={selectedNamespace}
-              onChange={(e) => onNamespaceChange(e.target.value)}
-              style={isInEditMode ? {...styles.select, ...styles.disabledSelect} : styles.select}
+              onChange={onNamespaceChange}
+              options={namespaces.map((ns) => ({
+                value: ns,
+                label: ns,
+              }))}
               disabled={isInEditMode}
               title={isInEditMode ? 'Cannot change namespace while in edit mode' : ''}
-            >
-              {namespaces.map((ns) => (
-                <option key={ns} value={ns}>
-                  {ns}
-                </option>
-              ))}
-            </select>
+            />
             <div style={styles.hint}>
               kubectl will use -n {selectedNamespace}
             </div>
@@ -122,22 +114,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '6px',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-  },
-  select: {
-    width: '100%',
-    padding: '6px 8px',
-    backgroundColor: '#3c3c3c',
-    border: '1px solid #3e3e42',
-    borderRadius: '4px',
-    color: '#cccccc',
-    fontSize: '13px',
-    cursor: 'pointer',
-    outline: 'none',
-  },
-  disabledSelect: {
-    opacity: 0.5,
-    cursor: 'not-allowed',
-    backgroundColor: '#2d2d2d',
   },
   hint: {
     fontSize: '10px',
