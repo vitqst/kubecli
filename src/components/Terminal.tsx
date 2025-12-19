@@ -24,10 +24,25 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
   const [isReady, setIsReady] = useState(false);
   const isMountedRef = useRef(true);
   const terminalIdRef = useRef<string | null>(null);
+  const prevEnvRef = useRef<Record<string, string> | undefined>(env);
 
   // Handle environment changes without recreating terminal
+  // Skip the initial run since env was already set during terminal creation
   useEffect(() => {
     if (!xtermRef.current || !env || !isReady || !terminalIdRef.current) return;
+
+    // Skip if this is the first run (env hasn't actually changed from creation)
+    const prevEnv = prevEnvRef.current;
+    const envChanged = !prevEnv ||
+      prevEnv.KUBECONFIG !== env.KUBECONFIG ||
+      prevEnv.KUBECTL_NAMESPACE !== env.KUBECTL_NAMESPACE;
+
+    prevEnvRef.current = env;
+
+    if (!envChanged) {
+      console.log(`[Terminal ${id}] Environment unchanged, skipping update`);
+      return;
+    }
 
     console.log(`[Terminal ${id}] Environment changed:`, env);
 
