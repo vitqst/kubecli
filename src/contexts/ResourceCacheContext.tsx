@@ -93,7 +93,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
 
     try {
       // Run ALL kubectl commands in PARALLEL
-      const [podsResult, deploymentsResult, cronjobsResult, servicesResult] = await Promise.all([
+      const [podsResult, deploymentsResult, cronjobsResult, servicesResult, configMapsResult, secretsResult] = await Promise.all([
         kube.runCommand(
           selectedContext,
           'get pods -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount'
@@ -109,6 +109,14 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         kube.runCommand(
           selectedContext,
           'get services -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.spec.type,CLUSTER-IP:.spec.clusterIP'
+        ),
+        kube.runCommand(
+          selectedContext,
+          'get configmaps -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name'
+        ),
+        kube.runCommand(
+          selectedContext,
+          'get secrets -A --no-headers -o custom-columns=NAMESPACE:.metadata.namespace,NAME:.metadata.name,TYPE:.type'
         ),
       ]);
 
@@ -188,6 +196,42 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
               namespace,
               status: type || 'ClusterIP',
               info: `Service | ${type} | ${clusterIP || 'N/A'}`,
+            });
+          }
+        });
+      }
+
+      // Process configmaps
+      if (configMapsResult.code === 0 && configMapsResult.stdout) {
+        const lines = configMapsResult.stdout.trim().split('\n').filter(line => line.trim());
+        lines.forEach(line => {
+          const parts = line.split(/\s+/);
+          if (parts.length >= 2) {
+            const [namespace, name] = parts;
+            allResources.push({
+              type: 'configmap',
+              name,
+              namespace,
+              status: 'Available',
+              info: 'ConfigMap',
+            });
+          }
+        });
+      }
+
+      // Process secrets
+      if (secretsResult.code === 0 && secretsResult.stdout) {
+        const lines = secretsResult.stdout.trim().split('\n').filter(line => line.trim());
+        lines.forEach(line => {
+          const parts = line.split(/\s+/);
+          if (parts.length >= 3) {
+            const [namespace, name, type] = parts;
+            allResources.push({
+              type: 'secret',
+              name,
+              namespace,
+              status: type || 'Secret',
+              info: `Secret | ${type || 'Opaque'}`,
             });
           }
         });
