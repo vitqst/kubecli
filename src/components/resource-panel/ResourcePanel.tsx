@@ -46,7 +46,7 @@ export function ResourcePanel({
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const { filterByNamespace, filterByType, isLoading } = useResourceCache();
+  const { filterByNamespace, filterByType, isLoading, refresh, refreshType } = useResourceCache();
 
   // Get resources based on selected type
   const resources = React.useMemo(() => {
@@ -121,16 +121,31 @@ export function ResourcePanel({
       {/* Header */}
       <div style={styles.header}>
         <span style={styles.title}>{title}</span>
-        <input
-          type="text"
-          placeholder={`Search ${title.toLowerCase()}...`}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          style={styles.searchInput}
-        />
-        <button style={styles.closeButton} onClick={onClose} title="Close panel">
-          ×
-        </button>
+        <div style={styles.headerActions}>
+          <input
+            type="text"
+            placeholder={`Search ${title.toLowerCase()}...`}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={styles.searchInput}
+          />
+          <button
+            style={styles.refreshButton}
+            onClick={() => {
+              if (selectedResourceType === 'cronjob') {
+                refreshType('cronjob');
+              } else if (selectedResourceType) {
+                refresh();
+              }
+            }}
+            title="Refresh resources"
+          >
+            ↻
+          </button>
+          <button style={styles.closeButton} onClick={onClose} title="Close panel">
+            ×
+          </button>
+        </div>
       </div>
 
       {/* Resource list */}
@@ -256,6 +271,26 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     color: '#858585',
     fontSize: '16px',
+  },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    flex: 1,
+  },
+  refreshButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    padding: 0,
+    backgroundColor: 'transparent',
+    border: '1px solid #3e3e42',
+    borderRadius: '4px',
+    color: '#cccccc',
+    fontSize: '14px',
+    cursor: 'pointer',
   },
   actionButtonHover: {
     backgroundColor: '#094771',
