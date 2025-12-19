@@ -201,11 +201,7 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         console.log(`[Terminal ${id}] Created successfully with backend ID: ${termId}`);
         terminalIdRef.current = termId;
 
-        // Disable shell history immediately after shell starts (silent - clear after)
-        // Leading space makes it ignored by history, clear hides it from user
-        terminalApi.write(termId, ' unset HISTFILE HISTSIZE SAVEHIST 2>/dev/null; clear\n').catch(() => {});
-
-        // Wait for clear to complete before showing terminal as ready
+        // Wait for backend initialization to complete
         setTimeout(() => {
           setIsReady(true);
 

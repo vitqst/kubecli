@@ -113,6 +113,14 @@ impl TerminalManager {
             },
         );
 
+        // Disable shell history and clear screen (silent initialization)
+        // Leading space makes command ignored by history, clear hides output
+        if let Some(session) = self.sessions.get_mut(&terminal_id) {
+            let init_cmd = "unset HISTFILE HISTSIZE SAVEHIST 2>/dev/null;";
+            let _ = session.writer.write_all(init_cmd.as_bytes());
+            let _ = session.writer.flush();
+        }
+
         Ok(terminal_id)
     }
 
