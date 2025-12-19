@@ -172,7 +172,10 @@ export function ResourcePanel({
                   {actions.slice(0, 3).map(action => (
                     <button
                       key={action.id}
-                      style={styles.actionButton}
+                      style={{
+                        ...styles.actionButton,
+                        ...(isHovered ? styles.actionButtonHover : {}),
+                      }}
                       onClick={() => onAction(action.id, selectedResourceType, resource.name, resource.namespace)}
                       title={action.description}
                     >
@@ -180,9 +183,14 @@ export function ResourcePanel({
                     </button>
                   ))}
                   <button
-                    style={styles.moreButton}
+                    style={{
+                      ...styles.moreButton,
+                      ...(isHovered ? styles.moreButtonHover : {}),
+                    }}
                     title="More actions"
                     onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       onShowContextMenu(
                         e.clientX,
                         e.clientY,
@@ -258,7 +266,14 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     color: '#858585',
     fontSize: '16px',
-    cursor: 'pointer',
+  },
+  actionButtonHover: {
+    backgroundColor: '#094771',
+    color: '#ffffff',
+  },
+  moreButtonHover: {
+    backgroundColor: '#2a2d2e',
+    color: '#ffffff',
   },
   list: {
     flex: 1,

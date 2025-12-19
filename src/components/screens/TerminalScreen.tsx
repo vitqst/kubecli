@@ -4,6 +4,7 @@ import { TabBar } from '../tabs/TabBar';
 import { SlimSidebar } from '../sidebar/SlimSidebar';
 import { ResourcePanel } from '../resource-panel/ResourcePanel';
 import { DuplicateTabDialog } from '../tabs/DuplicateTabDialog';
+import { ContextMenu } from '../sidebar/ContextMenu';
 import { ResourceType } from '../../resources';
 import { useTabs, Tab } from '../../hooks/useTabs';
 import { useBottomPanel } from '../../hooks/useBottomPanel';
@@ -128,14 +129,16 @@ export function TerminalScreen({
     actionId: string,
     resourceType: ResourceType,
     resourceName: string,
-    namespace: string
+    namespace?: string
   ) => {
+    const ns = namespace || selectedNamespace;
+
     // Check if tab already exists
-    const existingTab = findTabByResource(resourceType, resourceName, namespace);
+    const existingTab = findTabByResource(resourceType, resourceName, ns);
 
     if (existingTab) {
       // Show duplicate dialog
-      setPendingAction({ actionId, resourceType, resourceName, namespace, existingTab });
+      setPendingAction({ actionId, resourceType, resourceName, namespace: ns, existingTab });
       return;
     }
 
@@ -144,12 +147,12 @@ export function TerminalScreen({
 
     addTab({
       label,
-      resourceRef: { type: resourceType, name: resourceName, namespace, action: actionId },
+      resourceRef: { type: resourceType, name: resourceName, namespace: ns, action: actionId },
     });
 
     // Execute the action in the parent
-    onResourceAction(actionId, resourceType, resourceName, namespace);
-  }, [findTabByResource, addTab, onResourceAction]);
+    onResourceAction(actionId, resourceType, resourceName, ns);
+  }, [findTabByResource, addTab, onResourceAction, selectedNamespace]);
 
   // Handle duplicate dialog actions
   const handleSwitchToTab = useCallback(() => {
@@ -179,7 +182,15 @@ export function TerminalScreen({
     addTab({ label: 'Terminal' });
   }, [addTab]);
 
-  // Handle context menu for resources (placeholder - not used in this version)
+  // Context menu state for resource actions
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    resourceType: ResourceType;
+    resourceName: string;
+    namespace: string;
+  } | null>(null);
+
   const handleShowContextMenu = useCallback((
     x: number,
     y: number,
@@ -187,8 +198,11 @@ export function TerminalScreen({
     resourceName: string,
     namespace: string
   ) => {
-    // Context menu functionality can be added later if needed
-    // Intentionally left empty to avoid console output
+    setContextMenu({ x, y, resourceType, resourceName, namespace });
+  }, []);
+
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenu(null);
   }, []);
 
   /**
@@ -313,6 +327,19 @@ export function TerminalScreen({
           onSwitch={handleSwitchToTab}
           onOpenNew={handleOpenNewTab}
           onCancel={() => setPendingAction(null)}
+        />
+      )}
+
+      {/* Resource Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          resourceType={contextMenu.resourceType}
+          resourceName={contextMenu.resourceName}
+          namespace={contextMenu.namespace}
+          onAction={handleResourceAction}
+          onClose={handleCloseContextMenu}
         />
       )}
     </>
