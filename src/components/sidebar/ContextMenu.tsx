@@ -35,12 +35,18 @@ export function ContextMenu({
     resourceType,
   });
 
+  const margin = 8;
+  const estimatedHeight = 300; // approximate to keep menu onscreen
+  const menuWidth = 240;
+  const clampedLeft = Math.max(margin, Math.min(x + 4, window.innerWidth - menuWidth - margin));
+  const clampedTop = Math.max(margin, Math.min(y + 4, window.innerHeight - estimatedHeight - margin));
+
   return (
     <div
       style={{
         ...styles.contextMenu,
-        left: `${x}px`,
-        top: `${y}px`,
+        left: `${clampedLeft}px`,
+        top: `${clampedTop}px`,
       }}
       onClick={(e) => e.stopPropagation()}
     >
