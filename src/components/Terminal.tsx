@@ -201,9 +201,9 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         console.log(`[Terminal ${id}] Created successfully with backend ID: ${termId}`);
         terminalIdRef.current = termId;
 
-        // Disable shell history immediately after shell starts
-        // This runs before user can type, preventing history pollution
-        terminalApi.write(termId, ' unset HISTFILE; HISTSIZE=0; SAVEHIST=0\n').catch(() => {});
+        // Disable shell history immediately after shell starts (silent - clear after)
+        // Leading space makes it ignored by history, clear hides it from user
+        terminalApi.write(termId, ' unset HISTFILE HISTSIZE SAVEHIST 2>/dev/null; clear\n').catch(() => {});
 
         setIsReady(true);
 
