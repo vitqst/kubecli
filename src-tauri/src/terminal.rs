@@ -50,6 +50,11 @@ impl TerminalManager {
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
 
+        // Disable shell history to prevent polluting user's history file
+        cmd.env("HISTFILE", "");
+        cmd.env("HISTSIZE", "0");
+        cmd.env("SAVEHIST", "0");  // For zsh
+
         // Clear potentially problematic inherited variables
         // that can interfere with shell initialization
         cmd.env_remove("ZDOTDIR");
