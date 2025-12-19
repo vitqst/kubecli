@@ -220,23 +220,32 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
      */
     const fetchOne = async (type: ResourceType, command: string): Promise<CachedResource[]> => {
       const start = Date.now();
+      console.log(`[ResourceCache] [${type}] Starting fetch...`);
       try {
+        const cmdStart = Date.now();
         const result = await kube.runCommand(selectedContext, command);
-        const duration = Date.now() - start;
+        const cmdDuration = Date.now() - cmdStart;
+        console.log(`[ResourceCache] [${type}] kubectl command completed in ${cmdDuration}ms, stdout size: ${result.stdout?.length || 0} bytes`);
 
         if (result.code === 0 && result.stdout) {
+          const parseStart = Date.now();
           const resources = processJsonOutput(result.stdout, type);
+          const parseDuration = Date.now() - parseStart;
+          console.log(`[ResourceCache] [${type}] JSON parsing + processing took ${parseDuration}ms for ${resources.length} items`);
+
+          const duration = Date.now() - start;
           setLoadingStates(prev => ({
             ...prev,
             [type]: { status: 'success', count: resources.length, duration }
           }));
-          console.log(`[ResourceCache] ✓ ${type}: ${resources.length} items (${duration}ms)`);
+          console.log(`[ResourceCache] ✓ ${type}: ${resources.length} items (total: ${duration}ms, cmd: ${cmdDuration}ms, parse: ${parseDuration}ms)`);
           return resources;
         } else {
           const errorMsg = result.stderr || 'Unknown error';
+          const errDuration = Date.now() - start;
           setLoadingStates(prev => ({
             ...prev,
-            [type]: { status: 'error', error: errorMsg, duration }
+            [type]: { status: 'error', error: errorMsg, duration: errDuration }
           }));
           console.error(`[ResourceCache] ✗ ${type}: ${errorMsg}`);
           return [];

@@ -189,20 +189,58 @@ pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary
 }
 
 pub fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Result<String, String> {
+    use std::time::Instant;
+
+    let start = Instant::now();
+    let args_str = args.join(" ");
+
+    let kubeconfig = config_path.clone().unwrap_or_else(|| "default".to_string());
+    println!("[kube.rs] Starting: kubectl {} (KUBECONFIG={})", args_str, kubeconfig);
+
     let mut cmd = Command::new("kubectl");
 
-    if let Some(path) = config_path {
+    // Inherit HOME for Azure CLI credentials (~/.azure/)
+    if let Ok(home) = std::env::var("HOME") {
+        cmd.env("HOME", &home);
+    }
+
+    // Inherit PATH to find kubelogin and az CLI
+    if let Ok(path) = std::env::var("PATH") {
+        cmd.env("PATH", &path);
+    }
+
+    // Inherit Azure-specific env vars for auth
+    for var in &["AZURE_CONFIG_DIR", "AZURE_CLI_HOME", "KUBELOGIN_FORCE_NONINTERACTIVE"] {
+        if let Ok(val) = std::env::var(var) {
+            cmd.env(var, val);
+        }
+    }
+
+    if let Some(ref path) = config_path {
         cmd.env("KUBECONFIG", path);
     }
 
     cmd.args(&args);
 
+    let cmd_start = Instant::now();
     let output = cmd
         .output()
         .map_err(|e| format!("Failed to execute kubectl: {}", e))?;
+    let cmd_duration = cmd_start.elapsed();
+    println!("[kube.rs] kubectl command took {:?}, stdout size: {} bytes, stderr size: {} bytes",
+             cmd_duration, output.stdout.len(), output.stderr.len());
+
+    // Log stderr if any (might reveal auth issues)
+    if !output.stderr.is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("[kube.rs] kubectl stderr: {}", stderr);
+    }
 
     if output.status.success() {
-        String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8 in output: {}", e))
+        let result = String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8 in output: {}", e))?;
+        let total_duration = start.elapsed();
+        println!("[kube.rs] Total: {:?}, result size: {} chars", total_duration, result.len());
+        Ok(result)
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("kubectl error: {}", stderr))
