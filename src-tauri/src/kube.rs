@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
+use std::sync::mpsc;
+use std::thread;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 
@@ -189,6 +192,45 @@ pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary
 }
 
 pub fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Result<String, String> {
+    run_kubectl_with_timeout(args, config_path, Duration::from_secs(15), 2)
+}
+
+/// Run kubectl command with timeout and retry logic
+/// If a command times out, it will be retried up to `max_retries` times
+fn run_kubectl_with_timeout(
+    args: Vec<String>,
+    config_path: Option<String>,
+    timeout: Duration,
+    max_retries: u32,
+) -> Result<String, String> {
+    let mut last_error = String::new();
+
+    for attempt in 0..=max_retries {
+        if attempt > 0 {
+            eprintln!("[kubectl] Retry attempt {} for: {:?}", attempt, args);
+        }
+
+        match run_kubectl_once(&args, &config_path, timeout) {
+            Ok(output) => return Ok(output),
+            Err(e) => {
+                last_error = e;
+                if attempt < max_retries {
+                    // Brief pause before retry
+                    thread::sleep(Duration::from_millis(100));
+                }
+            }
+        }
+    }
+
+    Err(last_error)
+}
+
+/// Execute a single kubectl command with timeout
+fn run_kubectl_once(
+    args: &[String],
+    config_path: &Option<String>,
+    timeout: Duration,
+) -> Result<String, String> {
     let mut cmd = Command::new("kubectl");
 
     // Inherit HOME for Azure CLI credentials (~/.azure/)
@@ -225,17 +267,60 @@ pub fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Result<Str
         cmd.env("KUBECONFIG", path);
     }
 
-    cmd.args(&args);
+    cmd.args(args);
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
 
-    let output = cmd
-        .output()
+    let start = Instant::now();
+    let child = cmd
+        .spawn()
         .map_err(|e| format!("Failed to execute kubectl: {}", e))?;
 
-    if output.status.success() {
-        String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8 in output: {}", e))
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("kubectl error: {}", stderr))
+    // Use a channel to wait for the process with timeout
+    let (tx, rx) = mpsc::channel();
+    let child_id = child.id();
+
+    // Spawn a thread to wait for the child process
+    let wait_thread = thread::spawn(move || {
+        let result = child.wait_with_output();
+        let _ = tx.send(result);
+    });
+
+    // Wait for the result with timeout
+    match rx.recv_timeout(timeout) {
+        Ok(result) => {
+            let _ = wait_thread.join();
+            let output = result.map_err(|e| format!("Failed to wait for kubectl: {}", e))?;
+            let elapsed = start.elapsed();
+
+            if output.status.success() {
+                eprintln!("[kubectl] Success in {:?}: {:?}", elapsed, args);
+                String::from_utf8(output.stdout)
+                    .map_err(|e| format!("Invalid UTF-8 in output: {}", e))
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Err(format!("kubectl error: {}", stderr))
+            }
+        }
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            // Kill the process on timeout
+            eprintln!("[kubectl] Timeout after {:?}, killing process {}: {:?}", timeout, child_id, args);
+
+            // Try to kill the process (best effort)
+            #[cfg(unix)]
+            {
+                let _ = Command::new("kill").arg("-9").arg(child_id.to_string()).status();
+            }
+
+            // Wait for the thread to finish (the process should be dead now)
+            let _ = wait_thread.join();
+
+            Err(format!("kubectl timed out after {:?}", timeout))
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            let _ = wait_thread.join();
+            Err("kubectl process monitoring failed".to_string())
+        }
     }
 }
 
