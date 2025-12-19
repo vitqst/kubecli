@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ResourceType, getContextMenuActions } from '../../resources';
+import { ResourceType, getContextMenuActions, getFavoriteActions } from '../../resources';
 
 interface ContextMenuProps {
   x: number;
@@ -29,6 +29,12 @@ export function ContextMenu({
     return () => document.removeEventListener('click', handleClick);
   }, [onClose]);
 
+  const favorites = getFavoriteActions(resourceType, {
+    resourceName,
+    namespace: customNamespace || namespace,
+    resourceType,
+  });
+
   const actions = getContextMenuActions(resourceType, {
     resourceName,
     namespace: customNamespace || namespace,
@@ -36,7 +42,7 @@ export function ContextMenu({
   });
 
   const margin = 8;
-  const estimatedHeight = 300; // approximate to keep menu onscreen
+  const estimatedHeight = 320; // approximate to keep menu onscreen
   const menuWidth = 240;
   const clampedLeft = Math.max(margin, Math.min(x + 4, window.innerWidth - menuWidth - margin));
   const clampedTop = Math.max(margin, Math.min(y + 4, window.innerHeight - estimatedHeight - margin));
@@ -56,7 +62,36 @@ export function ContextMenu({
           {resourceType} · {customNamespace || namespace}
         </div>
       </div>
+
+      <div style={styles.contextMenuSectionTitle}>Quick actions</div>
+      {favorites.length === 0 && (
+        <div style={styles.contextMenuEmpty}>No quick actions</div>
+      )}
+      {favorites.map((action) => (
+        <div
+          key={`fav-${action.id}`}
+          style={styles.contextMenuItem}
+          onClick={() => {
+            onAction(action.id, resourceType, resourceName, customNamespace);
+            onClose();
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#094771';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+        >
+          <span style={styles.contextMenuIcon}>{action.icon}</span>
+          <span style={styles.contextMenuLabel}>{action.label}</span>
+        </div>
+      ))}
+
       <div style={styles.contextMenuDivider} />
+      <div style={styles.contextMenuSectionTitle}>More actions</div>
+      {actions.length === 0 && (
+        <div style={styles.contextMenuEmpty}>No additional actions</div>
+      )}
       {actions.map((action) => (
         <div
           key={action.id}
@@ -110,10 +145,18 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  contextMenuSectionTitle: {
+    padding: '6px 12px 4px 12px',
+    color: '#9ba3b0',
+    fontSize: '11px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.4px',
+  },
   contextMenuDivider: {
     height: '1px',
     backgroundColor: '#3e3e42',
-    margin: '0 0 4px 0',
+    margin: '6px 0 4px 0',
   },
   contextMenuItem: {
     display: 'flex',
@@ -130,5 +173,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   contextMenuLabel: {
     flex: 1,
+  },
+  contextMenuEmpty: {
+    padding: '8px 12px',
+    color: '#7f858f',
+    fontSize: '12px',
+    fontStyle: 'italic',
   },
 };
