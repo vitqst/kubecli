@@ -192,7 +192,7 @@ pub fn parse_kubeconfig(config_path: Option<String>) -> Result<KubeConfigSummary
 }
 
 pub fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Result<String, String> {
-    run_kubectl_with_timeout(args, config_path, Duration::from_secs(5), 2)
+    run_kubectl_with_timeout(args, config_path, Duration::from_secs(120), 2)
 }
 
 /// Run kubectl command with timeout and retry logic
@@ -278,7 +278,6 @@ fn run_kubectl_once(
 
     // Use a channel to wait for the process with timeout
     let (tx, rx) = mpsc::channel();
-    let child_id = child.id();
 
     // Spawn a thread to wait for the child process
     let wait_thread = thread::spawn(move || {
@@ -303,22 +302,10 @@ fn run_kubectl_once(
             }
         }
         Err(mpsc::RecvTimeoutError::Timeout) => {
-            // Kill the process on timeout
-            eprintln!("[kubectl] Timeout after {:?}, killing process {}: {:?}", timeout, child_id, args);
-
-            // Kill the entire process group to ensure child processes (like kubelogin) are also killed
-            #[cfg(unix)]
-            {
-                // Kill process group (negative PID kills the group)
-                let _ = Command::new("kill").arg("-9").arg(format!("-{}", child_id)).status();
-                // Also kill the process directly in case it's not a process group leader
-                let _ = Command::new("kill").arg("-9").arg(child_id.to_string()).status();
-            }
-
-            // Don't wait for the thread - just let it finish in background
-            // The process is dead, but wait_with_output may block on child process pipes
+            eprintln!("[kubectl] Timeout after {:?}: {:?}", timeout, args);
+            // Let the process finish in background - don't try to kill it
+            // as that can cause crashes
             drop(wait_thread);
-
             Err(format!("kubectl timed out after {:?}", timeout))
         }
         Err(mpsc::RecvTimeoutError::Disconnected) => {
