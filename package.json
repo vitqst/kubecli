@@ -1,7 +1,7 @@
 {
   "name": "kubecli",
   "productName": "KubeCLI",
-  "version": "1.0.0",
+  "version": "0.1.1",
   "description": "Desktop application for managing Kubernetes contexts and kubectl commands",
   "scripts": {
     "dev": "tauri dev",
