@@ -99,11 +99,11 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
 
     console.log(`[Terminal ${id}] Executing pending command:`, pendingCommand);
 
-    // Clear current line first with Ctrl+U, then send the command
-    // Using Ctrl+U alone to avoid Ctrl+C eating the first character
-    const clearAndExecute = '\x15' + pendingCommand + '\n';
+    // Send Ctrl+C to interrupt any running command (e.g., kubectl logs -f),
+    // then Ctrl+U to clear the line, then the new command
+    const interruptAndExecute = '\x03\x15' + pendingCommand + '\n';
 
-    terminalApi.write(terminalIdRef.current, clearAndExecute).then(() => {
+    terminalApi.write(terminalIdRef.current, interruptAndExecute).then(() => {
       console.log(`[Terminal ${id}] Command sent successfully`);
       if (onCommandExecuted) {
         onCommandExecuted();
