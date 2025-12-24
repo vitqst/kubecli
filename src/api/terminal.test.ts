@@ -24,7 +24,7 @@ describe('terminal API', () => {
 
       const result = await terminal.create();
 
-      expect(invoke).toHaveBeenCalledWith('terminal_create', { shell: null });
+      expect(invoke).toHaveBeenCalledWith('terminal_create', { shell: null, initialEnv: null });
       expect(result).toBe(mockTerminalId);
     });
 
@@ -34,7 +34,7 @@ describe('terminal API', () => {
 
       const result = await terminal.create('/bin/zsh');
 
-      expect(invoke).toHaveBeenCalledWith('terminal_create', { shell: '/bin/zsh' });
+      expect(invoke).toHaveBeenCalledWith('terminal_create', { shell: '/bin/zsh', initialEnv: null });
       expect(result).toBe(mockTerminalId);
     });
   });

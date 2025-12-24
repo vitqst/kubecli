@@ -1,21 +1,21 @@
 // src/components/resource-panel/ResourcePanel.tsx
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { ResourceType, getAllResources, getResourceDefinition } from '../../resources';
+import React, { useRef, useEffect, useCallback } from 'react';
+import { ResourceType, getResourceDefinition } from '../../resources';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
 import { LoadingProgress } from './LoadingProgress';
+import type { PanelState } from '../../hooks/useTabs';
 
 /**
- * Props for the ResourcePanel component
+ * Props for the ResourcePanel component.
+ * Now a controlled component - all state is passed via props.
  */
 interface ResourcePanelProps {
-  /** Whether the panel is currently open */
-  isOpen: boolean;
-  /** The currently selected resource type to display */
-  selectedResourceType: ResourceType | null;
+  /** Panel state from parent (controlled) */
+  panelState: PanelState;
+  /** Callback to update panel state */
+  onPanelStateChange: (updates: Partial<PanelState>) => void;
   /** All namespaces available for filtering */
   namespaces: string[];
-  /** Callback when a resource action is clicked */
-  onAction: (actionId: string, resourceType: ResourceType, resourceName: string, namespace: string) => void;
   /** Callback to show context menu for a resource */
   onShowContextMenu: (x: number, y: number, resourceType: ResourceType, resourceName: string, namespace: string) => void;
   /** Callback when the panel is closed */
@@ -24,38 +24,43 @@ interface ResourcePanelProps {
 
 const MIN_HEIGHT = 100;
 const MAX_HEIGHT_PERCENT = 0.5;
-const DEFAULT_HEIGHT = 200;
 
 /**
  * Resizable bottom panel component for browsing and interacting with Kubernetes resources.
  * Includes search, resize handle, inline actions, and a context menu trigger per row.
+ * Now a controlled component - state is passed via panelState prop.
  */
 export function ResourcePanel({
-  isOpen,
-  selectedResourceType,
+  panelState,
+  onPanelStateChange,
   namespaces,
-  onAction,
   onShowContextMenu,
   onClose,
 }: ResourcePanelProps) {
-  const [height, setHeight] = useState(() => {
-    const saved = localStorage.getItem('resourcePanelHeight');
-    return saved ? parseInt(saved, 10) : DEFAULT_HEIGHT;
-  });
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isResizing, setIsResizing] = useState(false);
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const [selectedNamespaces, setSelectedNamespaces] = useState<string[]>([]); // empty = all
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  // Destructure panel state for convenience
+  const {
+    isOpen,
+    selectedResourceType,
+    selectedNamespaces,
+    searchQuery,
+    sortColumn,
+    sortDirection,
+    height,
+  } = panelState;
+
+  const [isResizing, setIsResizing] = React.useState(false);
+  const [hoveredRow, setHoveredRow] = React.useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const { filterByNamespaces, filterByType, isLoading, loadingStates, refresh, refreshType } = useResourceCache();
+  const { filterByNamespaces, filterByType, isLoading, loadingStates, refreshType } = useResourceCache();
 
   // Keep selection in sync with available namespaces
   useEffect(() => {
-    setSelectedNamespaces(prev => prev.filter(ns => namespaces.includes(ns)));
-  }, [namespaces]);
+    const filtered = selectedNamespaces.filter(ns => namespaces.includes(ns));
+    if (filtered.length !== selectedNamespaces.length) {
+      onPanelStateChange({ selectedNamespaces: filtered });
+    }
+  }, [namespaces, selectedNamespaces, onPanelStateChange]);
 
   // Get resources based on selected type and namespaces (default: all namespaces)
   const resources = React.useMemo(() => {
@@ -117,16 +122,14 @@ export function ResourcePanel({
     if (sortColumn === columnKey) {
       // Toggle direction or clear sort
       if (sortDirection === 'asc') {
-        setSortDirection('desc');
+        onPanelStateChange({ sortDirection: 'desc' });
       } else {
-        setSortColumn(null);
-        setSortDirection('asc');
+        onPanelStateChange({ sortColumn: null, sortDirection: 'asc' });
       }
     } else {
-      setSortColumn(columnKey);
-      setSortDirection('asc');
+      onPanelStateChange({ sortColumn: columnKey, sortDirection: 'asc' });
     }
-  }, [sortColumn, sortDirection]);
+  }, [sortColumn, sortDirection, onPanelStateChange]);
 
   // Handle resize
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -145,12 +148,11 @@ export function ResourcePanel({
       const maxHeight = containerRect.height * MAX_HEIGHT_PERCENT;
       const newHeight = containerRect.bottom - e.clientY;
       const clampedHeight = Math.min(maxHeight, Math.max(MIN_HEIGHT, newHeight));
-      setHeight(clampedHeight);
+      onPanelStateChange({ height: clampedHeight });
     };
 
     const handleMouseUp = () => {
       setIsResizing(false);
-      localStorage.setItem('resourcePanelHeight', height.toString());
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -160,24 +162,18 @@ export function ResourcePanel({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, height]);
-
-  // Clear search and sort when resource type changes
-  useEffect(() => {
-    setSearchQuery('');
-    setSortColumn(null);
-    setSortDirection('asc');
-  }, [selectedResourceType]);
+  }, [isResizing, onPanelStateChange]);
 
   const toggleNamespace = useCallback((ns: string) => {
-    setSelectedNamespaces(prev =>
-      prev.includes(ns) ? prev.filter(item => item !== ns) : [...prev, ns]
-    );
-  }, []);
+    const newSelected = selectedNamespaces.includes(ns)
+      ? selectedNamespaces.filter(item => item !== ns)
+      : [...selectedNamespaces, ns];
+    onPanelStateChange({ selectedNamespaces: newSelected });
+  }, [selectedNamespaces, onPanelStateChange]);
 
   const clearNamespaces = useCallback(() => {
-    setSelectedNamespaces([]);
-  }, []);
+    onPanelStateChange({ selectedNamespaces: [] });
+  }, [onPanelStateChange]);
 
   if (!isOpen || !selectedResourceType) return null;
 
@@ -205,16 +201,14 @@ export function ResourcePanel({
             type="text"
             placeholder={`Search ${title.toLowerCase()}...`}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => onPanelStateChange({ searchQuery: e.target.value })}
             style={styles.searchInput}
           />
           <button
             style={styles.refreshButton}
             onClick={() => {
-              if (selectedResourceType === 'cronjob') {
-                refreshType('cronjob');
-              } else if (selectedResourceType) {
-                refresh();
+              if (selectedResourceType) {
+                refreshType(selectedResourceType);
               }
             }}
             title="Refresh resources"
@@ -306,7 +300,6 @@ export function ResourcePanel({
                       resource.namespace
                     );
                   }}
-                  onClick={() => onAction('describe', selectedResourceType, resource.name, resource.namespace)}
                 >
                   {columns.map(col => {
                     const rawValue = resource.columns[col.key];
@@ -405,7 +398,7 @@ const styles: Record<string, React.CSSProperties> = {
   list: {
     flex: 1,
     overflowY: 'auto',
-    padding: '4px 0',
+    paddingBottom: '4px',
   },
   empty: {
     padding: '16px',
@@ -454,6 +447,10 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
     borderBottom: '1px solid #3e3e42',
+    position: 'sticky',
+    top: 0,
+    backgroundColor: '#252526',
+    zIndex: 1,
   },
   colHeader: {
     overflow: 'hidden',
@@ -470,7 +467,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '8px',
     padding: '6px 12px',
-    cursor: 'pointer',
   },
   cell: {
     fontSize: '12px',

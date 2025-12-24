@@ -417,13 +417,147 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   }, [resources]);
 
   // Refresh specific resource type
-  const refreshType = useCallback((type: ResourceType) => {
-    // Invalidate cache for this type
-    const typedCacheKey = `${cacheKey}::${type}`;
-    cacheStorage.delete(typedCacheKey);
-    // Trigger full refresh
-    fetchResources();
-  }, [cacheKey, fetchResources]);
+  const refreshType = useCallback(async (type: ResourceType) => {
+    if (!selectedContext) return;
+
+    // Set loading state for this type only
+    setLoadingStates(prev => ({
+      ...prev,
+      [type]: { status: 'loading' }
+    }));
+
+    // Map resource type to kubectl command
+    const commandMap: Record<ResourceType, string> = {
+      pod: 'get pods -A -o json',
+      deployment: 'get deployments -A -o json',
+      cronjob: 'get cronjobs -A -o json',
+      service: 'get services -A -o json',
+      configmap: 'get configmaps -A -o json',
+      secret: 'get secrets -A -o json',
+      job: 'get jobs -A -o json',
+      statefulset: 'get statefulsets -A -o json',
+      daemonset: 'get daemonsets -A -o json',
+      ingress: 'get ingresses -A -o json',
+    };
+
+    const command = commandMap[type];
+    if (!command) return;
+
+    const start = Date.now();
+
+    /**
+     * Helper to extract a value from an object using a JSON path like '.metadata.name'
+     */
+    const getValueByPath = (obj: any, path: string): any => {
+      if (!path || !obj) return undefined;
+      const cleanPath = path.startsWith('.') ? path.slice(1) : path;
+      const parts = cleanPath.split('.');
+      let value = obj;
+      for (const part of parts) {
+        if (value === undefined || value === null) return undefined;
+        value = value[part];
+      }
+      return value;
+    };
+
+    try {
+      const result = await kube.runCommand(selectedContext, command);
+
+      if (result.code === 0 && result.stdout) {
+        const parsed = JSON.parse(result.stdout);
+        const items = parsed.items || [];
+        const resourceDef = getResourceDefinition(type);
+        const columns = resourceDef?.columns || [];
+
+        const newResources: CachedResource[] = items.map((item: any) => {
+          const columnValues: Record<string, any> = {};
+          for (const col of columns) {
+            columnValues[col.key] = getValueByPath(item, col.path);
+          }
+
+          // Generate legacy status and info fields
+          let status = 'Unknown';
+          let info = String(type);
+
+          if (type === 'pod') {
+            status = item.status?.phase || 'Unknown';
+            const statuses = item.status?.containerStatuses || [];
+            const ready = statuses.filter((s: any) => s?.ready).length;
+            info = `Pod | ${status} | ${ready}/${statuses.length}`;
+          } else if (type === 'deployment') {
+            status = 'Active';
+            const ready = item.status?.readyReplicas || 0;
+            const desired = item.status?.replicas || 0;
+            info = `Deployment | ${ready}/${desired}`;
+          } else if (type === 'cronjob') {
+            status = item.spec?.suspend ? 'Suspended' : 'Active';
+            const schedule = item.spec?.schedule || '';
+            info = `CronJob | ${schedule}`;
+          } else if (type === 'service') {
+            const svcType = item.spec?.type || 'ClusterIP';
+            status = svcType;
+            const clusterIP = item.spec?.clusterIP || 'N/A';
+            info = `Service | ${svcType} | ${clusterIP}`;
+          } else if (type === 'configmap') {
+            status = 'Available';
+            info = 'ConfigMap';
+          } else if (type === 'secret') {
+            const secretType = item.type || 'Opaque';
+            status = secretType;
+            info = `Secret | ${secretType}`;
+          }
+
+          return {
+            type,
+            name: item.metadata?.name || '',
+            namespace: item.metadata?.namespace || '',
+            status,
+            info,
+            columns: columnValues,
+          };
+        });
+
+        const duration = Date.now() - start;
+        setLoadingStates(prev => ({
+          ...prev,
+          [type]: { status: 'success', count: newResources.length, duration }
+        }));
+
+        // Update resources: replace only this type, keep others
+        setResources(prev => {
+          const otherResources = prev.filter(r => r.type !== type);
+          return [...otherResources, ...newResources];
+        });
+
+        // Update cache for this type
+        const now = new Date();
+        const ttl = CACHE_TTL[type];
+        const expiresAt = ttl === Infinity ? null as any : new Date(now.getTime() + ttl);
+        const typedCacheKey = `${cacheKey}::${type}`;
+        cacheStorage.set(typedCacheKey, {
+          resources: newResources,
+          lastUpdated: now,
+          expiresAt,
+        });
+
+        setLastUpdated(now);
+      } else {
+        const errorMsg = result.stderr || 'Unknown error';
+        const errDuration = Date.now() - start;
+        setLoadingStates(prev => ({
+          ...prev,
+          [type]: { status: 'error', error: errorMsg, duration: errDuration }
+        }));
+      }
+    } catch (err) {
+      const duration = Date.now() - start;
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setLoadingStates(prev => ({
+        ...prev,
+        [type]: { status: 'error', error: errorMsg, duration }
+      }));
+    }
+  }, [selectedContext, cacheKey]);
 
   const value: ResourceCacheContextType = {
     resources,

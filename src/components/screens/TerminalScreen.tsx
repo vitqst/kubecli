@@ -6,7 +6,8 @@ import { ResourcePanel } from '../resource-panel/ResourcePanel';
 import { ContextMenu } from '../sidebar/ContextMenu';
 import { ResourceType } from '../../resources';
 import { useTabs } from '../../hooks/useTabs';
-import { useBottomPanel } from '../../hooks/useBottomPanel';
+import type { PanelState } from '../../hooks/useTabs';
+import { useResourceCache } from '../../contexts/ResourceCacheContext';
 
 // Memoized Memory Display Component
 const MemoryDisplay = memo(() => {
@@ -101,11 +102,22 @@ export function TerminalScreen({
   onEditModeChange,
   onGoHome,
 }: TerminalScreenProps) {
-  // Tab management
-  const { tabs, activeTabId, addTab, closeTab, setActiveTab, updateTabs } = useTabs();
+  // Tab management (includes per-tab panel state)
+  const {
+    tabs,
+    activeTabId,
+    activeTab,
+    addTab,
+    closeTab,
+    setActiveTab,
+    updateTabs,
+    updateActivePanelState,
+    togglePanel,
+    closePanel,
+  } = useTabs();
 
-  // Bottom panel
-  const { isOpen: isPanelOpen, selectedResourceType, openPanel, closePanel, togglePanel } = useBottomPanel();
+  // Global resource cache refresh
+  const { refresh: refreshAllResources, isLoading: isRefreshingResources } = useResourceCache();
 
 
   // Memoize env object
@@ -113,6 +125,11 @@ export function TerminalScreen({
     KUBECONFIG: kubeconfigPath,
     KUBECTL_NAMESPACE: selectedNamespace
   }), [kubeconfigPath, selectedNamespace]);
+
+  // Callback to update active tab's panel state
+  const handlePanelStateChange = useCallback((updates: Partial<PanelState>) => {
+    updateActivePanelState(() => updates);
+  }, [updateActivePanelState]);
 
   // Handle resource action: run in the active tab and rename it to the resource
   const handleResourceAction = useCallback((
@@ -215,6 +232,34 @@ export function TerminalScreen({
           <span style={styles.configLabel}>Config:</span>
           <span style={styles.configPath}>{kubeconfigPath}</span>
         </div>
+        <button
+          onClick={refreshAllResources}
+          disabled={isRefreshingResources}
+          style={{
+            ...styles.refreshAllButton,
+            opacity: isRefreshingResources ? 0.6 : 1,
+            cursor: isRefreshingResources ? 'not-allowed' : 'pointer',
+          }}
+          className="refresh-all-button"
+          title="Refresh all resources (F5)"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              animation: isRefreshingResources ? 'spin 1s linear infinite' : 'none',
+            }}
+          >
+            <path d="M23 4v6h-6M1 20v-6h6" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+        </button>
         <MemoryDisplay />
       </header>
 
@@ -224,7 +269,7 @@ export function TerminalScreen({
         <SlimSidebar
           selectedContext={selectedContext}
           contexts={contexts}
-          selectedResourceType={selectedResourceType}
+          selectedResourceType={activeTab.panelState.selectedResourceType}
           onContextChange={onContextChange}
           onResourceTypeClick={togglePanel}
         />
@@ -264,10 +309,10 @@ export function TerminalScreen({
               ))}
             </div>
 
-            {/* Resource Panel */}
+            {/* Resource Panel - now controlled, uses active tab's panel state */}
             <ResourcePanel
-              isOpen={isPanelOpen}
-              selectedResourceType={selectedResourceType}
+              panelState={activeTab.panelState}
+              onPanelStateChange={handlePanelStateChange}
               namespaces={namespaces}
               onAction={handleResourceAction}
               onShowContextMenu={handleShowContextMenu}
@@ -331,6 +376,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.875rem',
     color: '#4ec9b0',
     fontFamily: 'monospace',
+  },
+  refreshAllButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    backgroundColor: 'transparent',
+    border: '1px solid #3e3e42',
+    borderRadius: '4px',
+    color: '#cccccc',
+    transition: 'background-color 0.2s, border-color 0.2s',
   },
   mainContainer: {
     display: 'flex',

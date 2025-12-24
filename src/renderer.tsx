@@ -308,6 +308,10 @@ function App() {
           .home-icon-button:hover {
             background-color: #3e3e42 !important;
           }
+          .refresh-all-button:hover:not(:disabled) {
+            background-color: #3e3e42 !important;
+            border-color: #0e639c !important;
+          }
           .get-started-button:hover {
             background-color: #1177bb !important;
           }
@@ -337,6 +341,14 @@ function App() {
             to {
               opacity: 1;
               transform: translateY(0);
+            }
+          }
+          @keyframes spin {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(360deg);
             }
           }
         `}</style>
