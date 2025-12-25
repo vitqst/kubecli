@@ -133,8 +133,12 @@ export function ActionPromptDialog({
                       <input
                         type="number"
                         id={prompt.name}
-                        value={values[prompt.name] || ''}
-                        onChange={(e) => handleChange(prompt.name, parseInt(e.target.value, 10))}
+                        value={values[prompt.name] ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          // Allow empty input for clearing, otherwise parse as number
+                          handleChange(prompt.name, val === '' ? '' : parseInt(val, 10));
+                        }}
                         placeholder={prompt.placeholder}
                         required={prompt.required}
                         min={prompt.min}

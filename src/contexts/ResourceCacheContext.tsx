@@ -416,15 +416,22 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     return resources.filter(resource => resource.type === type).length;
   }, [resources]);
 
-  // Refresh specific resource type
+  // Refresh specific resource type (background refresh if cached, loading state if not)
   const refreshType = useCallback(async (type: ResourceType) => {
     if (!selectedContext) return;
 
-    // Set loading state for this type only
-    setLoadingStates(prev => ({
-      ...prev,
-      [type]: { status: 'loading' }
-    }));
+    // Check cache directly instead of depending on resources state
+    const typedCacheKey = `${cacheKey}::${type}`;
+    const hasCachedData = cacheStorage.has(typedCacheKey);
+
+    // Only show loading state if there's no cached data
+    // If cached, refresh silently in background
+    if (!hasCachedData) {
+      setLoadingStates(prev => ({
+        ...prev,
+        [type]: { status: 'loading' }
+      }));
+    }
 
     // Map resource type to kubectl command
     const commandMap: Record<ResourceType, string> = {
