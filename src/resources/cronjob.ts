@@ -95,6 +95,7 @@ const triggerAction: ResourceAction = {
   label: 'Trigger',
   icon: '▶️',
   description: 'Create job from cronjob',
+  refreshAfterMs: 5000, // Auto-refresh to show new job in active
   getCommand: (ctx) => kubectl(ctx.namespace, `create job --from=cronjobs/${ctx.resourceName} ${ctx.resourceName}-manual-$(date +%s)\n`),
 };
 
@@ -103,6 +104,7 @@ const suspendAction: ResourceAction = {
   label: 'Suspend',
   icon: '⏸️',
   description: 'Suspend cronjob',
+  refreshAfterMs: 5000, // Auto-refresh to update suspend status
   getCommand: (ctx) => kubectl(ctx.namespace, `patch cronjobs/${ctx.resourceName} -p '{"spec":{"suspend":true}}'\n`),
 };
 
@@ -111,6 +113,7 @@ const resumeAction: ResourceAction = {
   label: 'Resume',
   icon: '▶️',
   description: 'Resume cronjob',
+  refreshAfterMs: 1000, // Auto-refresh to update suspend status
   getCommand: (ctx) => kubectl(ctx.namespace, `patch cronjobs/${ctx.resourceName} -p '{"spec":{"suspend":false}}'\n`),
 };
 
@@ -128,6 +131,7 @@ const deleteAction: ResourceAction = {
   label: 'Delete',
   icon: '🗑️',
   description: 'Delete cronjob',
+  refreshAfterMs: 5000, // Auto-refresh to remove from list
   confirmMessage: (ctx) => `Are you sure you want to delete cronjob "${ctx.resourceName}"? This action cannot be undone.`,
   getCommand: (ctx) => kubectl(ctx.namespace, `delete cronjobs/${ctx.resourceName}\n`),
 };

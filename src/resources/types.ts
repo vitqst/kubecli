@@ -101,6 +101,12 @@ export interface ResourceAction {
    * If defined, shows a confirm dialog
    */
   confirmMessage?: string | ((context: ResourceActionContext) => string);
+  /**
+   * Optional: Delay in ms before auto-refreshing the resource panel after action
+   * If defined, triggers a refresh of this resource type after the specified delay
+   * Useful for actions like scale where Kubernetes needs time to reconcile
+   */
+  refreshAfterMs?: number;
 }
 
 /**

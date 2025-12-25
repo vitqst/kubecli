@@ -76,6 +76,7 @@ export const secretResource: ResourceDefinition = {
       label: 'Delete',
       icon: '🗑️',
       description: 'Delete Secret',
+      refreshAfterMs: 5000, // Auto-refresh to remove from list
       confirmMessage: ({ resourceName, namespace }) => `Delete Secret ${resourceName} in ${namespace}?`,
       getCommand: ({ namespace, resourceName }) => kubectl(namespace, `delete secret ${resourceName}`),
     },

@@ -104,6 +104,7 @@ const scaleAction: ResourceAction = {
   label: 'Scale',
   icon: '📊',
   description: 'Scale replicas',
+  refreshAfterMs: 5000, // Auto-refresh after 2s to show updated replica count
   prompts: [
     {
       name: 'replicas',
@@ -131,6 +132,7 @@ const restartAction: ResourceAction = {
   label: 'Restart',
   icon: '🔄',
   description: 'Restart deployment',
+  refreshAfterMs: 5000, // Auto-refresh after 3s to show pod changes
   getCommand: (ctx) => kubectl(ctx.namespace, `rollout restart deployment ${ctx.resourceName}\n`),
 };
 
@@ -164,6 +166,7 @@ const deleteAction: ResourceAction = {
   label: 'Delete',
   icon: '🗑️',
   description: 'Delete deployment',
+  refreshAfterMs: 5000, // Auto-refresh to remove from list
   confirmMessage: (ctx) => `Are you sure you want to delete deployment "${ctx.resourceName}"? This will terminate all pods. This action cannot be undone.`,
   getCommand: (ctx) => kubectl(ctx.namespace, `delete deployment ${ctx.resourceName}\n`),
 };

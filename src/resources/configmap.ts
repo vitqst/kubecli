@@ -75,6 +75,7 @@ export const configMapResource: ResourceDefinition = {
       label: 'Delete',
       icon: '🗑️',
       description: 'Delete ConfigMap',
+      refreshAfterMs: 5000, // Auto-refresh to remove from list
       confirmMessage: ({ resourceName, namespace }) => `Delete ConfigMap ${resourceName} in ${namespace}?`,
       getCommand: ({ namespace, resourceName }) => kubectl(namespace, `delete configmap ${resourceName}`),
     },

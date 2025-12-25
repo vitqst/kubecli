@@ -14,6 +14,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { KubectlPalette } from './components/KubectlPalette';
 import { addRecentCommand } from './commands';
 import { kube as kubeAPI, terminal as terminalAPI, window as windowAPI } from './api';
+import { useResourceCache } from './contexts/ResourceCacheContext';
 
 type LoadState = 'idle' | 'loading' | 'error';
 
@@ -39,6 +40,11 @@ function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
   const [isKubectlPaletteOpen, setIsKubectlPaletteOpen] = useState<boolean>(false);
   const [pendingCommand, setPendingCommand] = useState<string | null>(null);
+  // Track pending refresh after action completes (resourceType and delay in ms)
+  const [pendingRefresh, setPendingRefresh] = useState<{ type: ResourceType; delayMs: number } | null>(null);
+
+  // Access resource cache for delayed refresh
+  const { refreshType } = useResourceCache();
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
@@ -251,6 +257,11 @@ function App() {
     const command = action.getCommand(context, promptValues);
     console.log('[Action] Executing command:', command);
 
+    // Schedule delayed refresh if action specifies it
+    if (action.refreshAfterMs) {
+      setPendingRefresh({ type: context.resourceType, delayMs: action.refreshAfterMs });
+    }
+
     // Ensure terminal is visible and send command
     if (!showTerminal) {
       setShowTerminal(true);
@@ -258,10 +269,19 @@ function App() {
     setPendingCommand(command);
   }, [showTerminal]);
 
-  // Handle command executed callback - clear pending command
+  // Handle command executed callback - clear pending command and trigger delayed refresh
   const handleCommandExecuted = useCallback(() => {
     setPendingCommand(null);
-  }, []);
+
+    // Trigger delayed refresh if scheduled
+    if (pendingRefresh) {
+      const { type, delayMs } = pendingRefresh;
+      setPendingRefresh(null);
+      setTimeout(() => {
+        refreshType(type);
+      }, delayMs);
+    }
+  }, [pendingRefresh, refreshType]);
 
   // Handle prompt confirm
   const handlePromptConfirm = useCallback((values: Record<string, any>) => {

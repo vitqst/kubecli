@@ -115,6 +115,7 @@ const deleteAction: ResourceAction = {
   label: 'Delete',
   icon: '🗑️',
   description: 'Delete service',
+  refreshAfterMs: 5000, // Auto-refresh to remove from list
   confirmMessage: (ctx) => `Are you sure you want to delete service "${ctx.resourceName}"? This action cannot be undone.`,
   getCommand: (ctx) => kubectl(ctx.namespace, `delete service ${ctx.resourceName}\n`),
 };

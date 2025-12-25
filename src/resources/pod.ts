@@ -163,6 +163,7 @@ const deleteAction: ResourceAction = {
   label: 'Delete',
   icon: '🗑️',
   description: 'Delete pod',
+  refreshAfterMs: 5000, // Auto-refresh to remove from list
   confirmMessage: (ctx) => `Are you sure you want to delete pod "${ctx.resourceName}"? This action cannot be undone.`,
   getCommand: (ctx) => kubectl(ctx.namespace, `delete pod ${ctx.resourceName}\n`),
 };
