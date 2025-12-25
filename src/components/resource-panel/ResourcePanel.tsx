@@ -54,6 +54,13 @@ export function ResourcePanel({
 
   const { filterByNamespaces, filterByType, isLoading, loadingStates, refreshType } = useResourceCache();
 
+  // Auto-refresh when panel opens or resource type changes
+  useEffect(() => {
+    if (isOpen && selectedResourceType) {
+      refreshType(selectedResourceType);
+    }
+  }, [isOpen, selectedResourceType, refreshType]);
+
   // Keep selection in sync with available namespaces
   useEffect(() => {
     const filtered = selectedNamespaces.filter(ns => namespaces.includes(ns));
