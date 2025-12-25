@@ -17,6 +17,7 @@ pub fn run() {
             terminal_write_silent,
             terminal_resize,
             terminal_close,
+            open_new_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

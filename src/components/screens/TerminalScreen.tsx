@@ -8,6 +8,7 @@ import { ResourceType } from '../../resources';
 import { useTabs } from '../../hooks/useTabs';
 import type { PanelState } from '../../hooks/useTabs';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
+import { window as windowAPI } from '../../api';
 
 // Memoized Memory Display Component
 const MemoryDisplay = memo(() => {
@@ -260,6 +261,27 @@ export function TerminalScreen({
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
           </svg>
         </button>
+        <button
+          onClick={() => windowAPI.openNewWindow()}
+          style={styles.newWindowButton}
+          className="new-window-button"
+          title="Open new window (Ctrl+Shift+N)"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </svg>
+        </button>
         <MemoryDisplay />
       </header>
 
@@ -309,12 +331,11 @@ export function TerminalScreen({
               ))}
             </div>
 
-            {/* Resource Panel - now controlled, uses active tab's panel state */}
+          {/* Resource Panel - now controlled, uses active tab's panel state */}
             <ResourcePanel
               panelState={activeTab.panelState}
               onPanelStateChange={handlePanelStateChange}
               namespaces={namespaces}
-              onAction={handleResourceAction}
               onShowContextMenu={handleShowContextMenu}
               onClose={closePanel}
             />
@@ -387,6 +408,19 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #3e3e42',
     borderRadius: '4px',
     color: '#cccccc',
+    transition: 'background-color 0.2s, border-color 0.2s',
+  },
+  newWindowButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    backgroundColor: 'transparent',
+    border: '1px solid #3e3e42',
+    borderRadius: '4px',
+    color: '#cccccc',
+    cursor: 'pointer',
     transition: 'background-color 0.2s, border-color 0.2s',
   },
   mainContainer: {

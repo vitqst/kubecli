@@ -121,7 +121,7 @@ const scaleAction: ResourceAction = {
     },
   ],
   getCommand: (ctx, values) => {
-    const replicas = values?.replicas || 1;
+    const replicas = values?.replicas ?? 1;
     return kubectl(ctx.namespace, `scale deployment ${ctx.resourceName} --replicas=${replicas}\n`);
   },
 };

@@ -1,6 +1,6 @@
 use crate::kube::{self, KubeConfigSummary};
 use crate::terminal::TERMINAL_MANAGER;
-use tauri::AppHandle;
+use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
 
 #[tauri::command]
 pub async fn get_contexts(config_path: Option<String>) -> Result<KubeConfigSummary, String> {
@@ -74,4 +74,18 @@ pub fn terminal_close(terminal_id: String) -> Result<(), String> {
     let mut manager = TERMINAL_MANAGER.lock()
         .map_err(|_| "Failed to lock terminal manager".to_string())?;
     manager.close(&terminal_id)
+}
+
+/// Opens a new isolated KubeCLI window. Each window has its own state.
+#[tauri::command]
+pub fn open_new_window(app: AppHandle) -> Result<(), String> {
+    let label = format!("kubecli-{}", uuid::Uuid::new_v4());
+
+    WebviewWindowBuilder::new(&app, &label, WebviewUrl::default())
+        .title("KubeCLI")
+        .inner_size(1200.0, 800.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }

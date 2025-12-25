@@ -1583,6 +1583,7 @@ dependencies = [
  "serde_yaml",
  "tauri",
  "tauri-build",
+ "uuid",
 ]
 
 [[package]]

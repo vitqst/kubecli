@@ -167,11 +167,11 @@ describe('Terminal Component', () => {
         expect(mockInvoke).toHaveBeenCalledWith('terminal_create', expect.anything());
       });
 
-      // Wait for command to be written (includes Ctrl+U prefix to clear line)
+      // Wait for command to be written (includes Ctrl+C to interrupt, Ctrl+U to clear line)
       await waitFor(() => {
         expect(mockInvoke).toHaveBeenCalledWith('terminal_write', {
           terminalId: 'term_test_1',
-          data: '\u0015kubectl get pods\n',
+          data: '\x03\x15kubectl get pods\n',
         });
       });
     });

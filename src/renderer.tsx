@@ -13,7 +13,7 @@ import { ErrorBanner } from './components/ErrorBanner';
 import { CommandPalette } from './components/CommandPalette';
 import { KubectlPalette } from './components/KubectlPalette';
 import { addRecentCommand } from './commands';
-import { kube as kubeAPI, terminal as terminalAPI } from './api';
+import { kube as kubeAPI, terminal as terminalAPI, window as windowAPI } from './api';
 
 type LoadState = 'idle' | 'loading' | 'error';
 
@@ -68,7 +68,7 @@ function App() {
     }
   }, []);
 
-  // Keyboard shortcuts: Ctrl+Shift+P for command palette, Ctrl+K for kubectl palette
+  // Keyboard shortcuts: Ctrl+Shift+P for command palette, Ctrl+K for kubectl palette, Ctrl+Shift+N for new window
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ctrl+Shift+P or Cmd+Shift+P (Mac) - Resource Command Palette
@@ -80,6 +80,11 @@ function App() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setIsKubectlPaletteOpen(true);
+      }
+      // Ctrl+Shift+N or Cmd+Shift+N - Open New Window
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'N') {
+        e.preventDefault();
+        windowAPI.openNewWindow();
       }
     };
 
@@ -102,6 +107,14 @@ function App() {
       console.error('Failed to load contexts:', error);
     });
   }, [loadNamespaces]);
+
+  // Update window title when context or config changes
+  useEffect(() => {
+    windowAPI.updateWindowTitle(
+      selectedContext || null,
+      kubeconfigPath || null
+    );
+  }, [selectedContext, kubeconfigPath]);
 
   // Handle config change
   const handleConfigChange = useCallback((newConfigPath: string) => {
@@ -309,6 +322,10 @@ function App() {
             background-color: #3e3e42 !important;
           }
           .refresh-all-button:hover:not(:disabled) {
+            background-color: #3e3e42 !important;
+            border-color: #0e639c !important;
+          }
+          .new-window-button:hover {
             background-color: #3e3e42 !important;
             border-color: #0e639c !important;
           }
