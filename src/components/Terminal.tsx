@@ -105,6 +105,10 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
 
     terminalApi.write(terminalIdRef.current, interruptAndExecute).then(() => {
       console.log(`[Terminal ${id}] Command sent successfully`);
+      // Focus the terminal after sending command so user can interact immediately
+      if (xtermRef.current) {
+        xtermRef.current.focus();
+      }
       if (onCommandExecuted) {
         onCommandExecuted();
       }
