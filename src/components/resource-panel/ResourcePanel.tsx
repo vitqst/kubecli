@@ -437,7 +437,6 @@ const styles: Record<string, React.CSSProperties> = {
   selectedNsLabel: {
     fontSize: '11px',
     color: '#858585',
-    marginLeft: '8px',
   },
   tableHeader: {
     display: 'grid',
