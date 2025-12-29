@@ -13,10 +13,7 @@ import { ErrorBanner } from './components/ErrorBanner';
 import { CommandPalette } from './components/CommandPalette';
 import { KubectlPalette } from './components/KubectlPalette';
 import { addRecentCommand } from './commands';
-import { kube as kubeAPI, terminal as terminalAPI, window as windowAPI } from './api';
-import { useResourceCache } from './contexts/ResourceCacheContext';
-
-type LoadState = 'idle' | 'loading' | 'error';
+import { kube as kubeAPI, window as windowAPI } from './api';
 
 function App() {
   // State
@@ -40,11 +37,8 @@ function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
   const [isKubectlPaletteOpen, setIsKubectlPaletteOpen] = useState<boolean>(false);
   const [pendingCommand, setPendingCommand] = useState<string | null>(null);
-  // Track pending refresh after action completes (resourceType and delay in ms)
+  // Store pending refresh info - use state so it triggers re-render and passes to TerminalScreen
   const [pendingRefresh, setPendingRefresh] = useState<{ type: ResourceType; delayMs: number } | null>(null);
-
-  // Access resource cache for delayed refresh
-  const { refreshType } = useResourceCache();
 
   // Load namespaces for current context
   const loadNamespaces = useCallback(async (contextName: string) => {
@@ -257,9 +251,12 @@ function App() {
     const command = action.getCommand(context, promptValues);
     console.log('[Action] Executing command:', command);
 
-    // Schedule delayed refresh if action specifies it
+    // Store refresh info if action needs it - will be triggered from onCommandExecuted
     if (action.refreshAfterMs) {
       setPendingRefresh({ type: context.resourceType, delayMs: action.refreshAfterMs });
+      console.log(`[Action] Will refresh ${context.resourceType} after ${action.refreshAfterMs}ms`);
+    } else {
+      setPendingRefresh(null);
     }
 
     // Ensure terminal is visible and send command
@@ -269,19 +266,12 @@ function App() {
     setPendingCommand(command);
   }, [showTerminal]);
 
-  // Handle command executed callback - clear pending command and trigger delayed refresh
+  // Handle command executed callback - clear pending command
   const handleCommandExecuted = useCallback(() => {
     setPendingCommand(null);
-
-    // Trigger delayed refresh if scheduled
-    if (pendingRefresh) {
-      const { type, delayMs } = pendingRefresh;
-      setPendingRefresh(null);
-      setTimeout(() => {
-        refreshType(type);
-      }, delayMs);
-    }
-  }, [pendingRefresh, refreshType]);
+    // Clear the pending refresh (the actual refresh is handled by TerminalScreen)
+    setPendingRefresh(null);
+  }, []);
 
   // Handle prompt confirm
   const handlePromptConfirm = useCallback((values: Record<string, any>) => {
@@ -402,6 +392,7 @@ function App() {
           isInEditMode={isInEditMode}
           isConfigChanging={isConfigChanging}
           pendingCommand={pendingCommand}
+          pendingRefresh={pendingRefresh}
           onCommandExecuted={handleCommandExecuted}
           onConfigChange={handleConfigChange}
           onContextChange={handleContextChange}

@@ -74,6 +74,7 @@ interface TerminalScreenProps {
   isInEditMode: boolean;
   isConfigChanging: boolean;
   pendingCommand?: string | null;
+  pendingRefresh?: { type: ResourceType; delayMs: number } | null;
   onCommandExecuted?: () => void;
   onConfigChange: (path: string) => void;
   onContextChange: (context: string) => void;
@@ -95,6 +96,7 @@ export function TerminalScreen({
   isInEditMode,
   isConfigChanging,
   pendingCommand,
+  pendingRefresh,
   onCommandExecuted,
   onConfigChange,
   onContextChange,
@@ -118,7 +120,32 @@ export function TerminalScreen({
   } = useTabs();
 
   // Global resource cache refresh
-  const { refresh: refreshAllResources, isLoading: isRefreshingResources } = useResourceCache();
+  const { refresh: refreshAllResources, refreshType, isLoading: isRefreshingResources } = useResourceCache();
+
+  // Store pending refresh to trigger after command completes
+  const pendingRefreshRef = React.useRef<{ type: ResourceType; delayMs: number } | null>(null);
+
+  // Update pending refresh ref when prop changes
+  React.useEffect(() => {
+    if (pendingRefresh) {
+      pendingRefreshRef.current = pendingRefresh;
+    }
+  }, [pendingRefresh]);
+
+  // Handle command executed - trigger delayed refresh if scheduled
+  const handleCommandExecuted = useCallback(() => {
+    onCommandExecuted?.();
+
+    const pending = pendingRefreshRef.current;
+    if (pending) {
+      pendingRefreshRef.current = null;
+      console.log(`[TerminalScreen] Command executed, scheduling refresh for ${pending.type} in ${pending.delayMs}ms`);
+      setTimeout(() => {
+        console.log(`[TerminalScreen] Refreshing ${pending.type}`);
+        refreshType(pending.type);
+      }, pending.delayMs);
+    }
+  }, [onCommandExecuted, refreshType]);
 
 
   // Memoize env object
@@ -324,7 +351,7 @@ export function TerminalScreen({
                     env={terminalEnv}
                     isLoading={isConfigChanging}
                     pendingCommand={tab.id === activeTabId ? pendingCommand : null}
-                    onCommandExecuted={onCommandExecuted}
+                    onCommandExecuted={handleCommandExecuted}
                     onEditModeChange={onEditModeChange}
                   />
                 </div>

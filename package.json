@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "author": {
-    "name": "vit",
-    "email": "vit@gmail.com"
+    "name": "vitqst",
+    "email": "vitqst.work@gmail.com"
   },
   "license": "MIT",
   "dependencies": {
