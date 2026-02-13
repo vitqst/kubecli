@@ -215,21 +215,40 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     };
 
     /**
-     * Fetch a single resource type and update its loading state
+     * Fetch a single resource type, immediately update state & cache when done.
+     * This allows each resource type to appear in the UI as soon as it loads,
+     * without waiting for all other types to finish.
      */
-    const fetchOne = async (type: ResourceType, command: string): Promise<CachedResource[]> => {
+    const fetchOne = async (type: ResourceType, command: string): Promise<void> => {
       const start = Date.now();
       try {
         const result = await kube.runCommand(selectedContext, command);
 
         if (result.code === 0 && result.stdout) {
-          const resources = processJsonOutput(result.stdout, type);
+          const fetchedResources = processJsonOutput(result.stdout, type);
           const duration = Date.now() - start;
           setLoadingStates(prev => ({
             ...prev,
-            [type]: { status: 'success', count: resources.length, duration }
+            [type]: { status: 'success', count: fetchedResources.length, duration }
           }));
-          return resources;
+
+          // Immediately push these resources into state so the UI updates
+          setResources(prev => {
+            const otherResources = prev.filter(r => r.type !== type);
+            return [...otherResources, ...fetchedResources];
+          });
+
+          // Update cache for this type
+          const now = new Date();
+          const ttl = CACHE_TTL[type];
+          const expiresAt = ttl === Infinity ? null as any : new Date(now.getTime() + ttl);
+          const typedCacheKey = `${cacheKey}::${type}`;
+          cacheStorage.set(typedCacheKey, {
+            resources: fetchedResources,
+            lastUpdated: now,
+            expiresAt,
+          });
+          setLastUpdated(now);
         } else {
           const errorMsg = result.stderr || 'Unknown error';
           const errDuration = Date.now() - start;
@@ -238,7 +257,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
             [type]: { status: 'error', error: errorMsg, duration: errDuration }
           }));
           console.error(`[ResourceCache] ✗ ${type}: ${errorMsg}`);
-          return [];
         }
       } catch (err) {
         const duration = Date.now() - start;
@@ -248,13 +266,14 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
           [type]: { status: 'error', error: errorMsg, duration }
         }));
         console.error(`[ResourceCache] ✗ ${type}: ${errorMsg}`);
-        return [];
       }
     };
 
     try {
-      // Run ALL kubectl commands in PARALLEL, each updates its own state
-      const results = await Promise.all([
+      // Fire ALL kubectl commands in PARALLEL.
+      // Each fetchOne independently updates resources state as soon as it resolves,
+      // so the UI progressively shows results as they arrive.
+      await Promise.all([
         fetchOne('pod', 'get pods -A -o json'),
         fetchOne('deployment', 'get deployments -A -o json'),
         fetchOne('cronjob', 'get cronjobs -A -o json'),
@@ -262,34 +281,6 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         fetchOne('configmap', 'get configmaps -A -o json'),
         fetchOne('secret', 'get secrets -A -o json'),
       ]);
-
-
-      const allResources = results.flat();
-      const now = new Date();
-
-      // Cache each resource type with its TTL
-      const resourcesByType = new Map<ResourceType, CachedResource[]>();
-      allResources.forEach(resource => {
-        if (!resourcesByType.has(resource.type)) {
-          resourcesByType.set(resource.type, []);
-        }
-        resourcesByType.get(resource.type)!.push(resource);
-      });
-
-      resourcesByType.forEach((resources, type) => {
-        const ttl = CACHE_TTL[type];
-        const expiresAt = ttl === Infinity ? null as any : new Date(now.getTime() + ttl);
-        const typedCacheKey = `${cacheKey}::${type}`;
-
-        cacheStorage.set(typedCacheKey, {
-          resources,
-          lastUpdated: now,
-          expiresAt,
-        });
-      });
-
-      setResources(allResources);
-      setLastUpdated(now);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch resources';
       console.error('[ResourceCache] Failed to fetch resources:', err);
@@ -301,8 +292,8 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
           details: errorMessage.includes('auth') || errorMessage.includes('permission')
             ? 'Authentication may have expired. Try switching contexts or reconfiguring kubectl.'
             : errorMessage.includes('connection') || errorMessage.includes('timeout')
-            ? 'Cannot connect to cluster. Check your network and cluster status.'
-            : errorMessage,
+              ? 'Cannot connect to cluster. Check your network and cluster status.'
+              : errorMessage,
           severity: 'error',
           dismissible: true,
           action: {
@@ -375,7 +366,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         const typeMatches = resource.type.toLowerCase().includes(typeFilter);
         const nameMatches = nameQuery
           ? resource.name.toLowerCase().includes(nameQuery) ||
-            resource.namespace.toLowerCase().includes(nameQuery)
+          resource.namespace.toLowerCase().includes(nameQuery)
           : true;
         return typeMatches && nameMatches;
       }).slice(0, 20);

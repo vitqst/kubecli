@@ -90,7 +90,7 @@ export function TerminalSidebar({
   onResourceAction,
 }: TerminalSidebarProps) {
   // Use global resource cache from context
-  const { filterByType, filterByNamespace, isLoading: cacheLoading, refresh: refreshCache } = useResourceCache();
+  const { filterByType, filterByNamespace, loadingStates, refresh: refreshCache } = useResourceCache();
 
   // State
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -221,7 +221,7 @@ export function TerminalSidebar({
             title="Pods"
             icon="📦"
             items={pods}
-            loading={cacheLoading}
+            loading={loadingStates.pod?.status === 'loading'}
             isCollapsed={!expandedSections.pods}
             isInEditMode={isInEditMode}
             resourceType="pod"
@@ -248,7 +248,7 @@ export function TerminalSidebar({
             title="Deployments"
             icon="🚀"
             items={deployments}
-            loading={cacheLoading}
+            loading={loadingStates.deployment?.status === 'loading'}
             isCollapsed={!expandedSections.deployments}
             isInEditMode={isInEditMode}
             resourceType="deployment"
@@ -275,7 +275,7 @@ export function TerminalSidebar({
             title="CronJobs"
             icon="⏰"
             items={cronJobs}
-            loading={cacheLoading}
+            loading={loadingStates.cronjob?.status === 'loading'}
             isCollapsed={!expandedSections.cronjobs}
             isInEditMode={isInEditMode}
             resourceType="cronjob"

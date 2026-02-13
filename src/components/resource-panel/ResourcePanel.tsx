@@ -255,7 +255,7 @@ export function ResourcePanel({
 
       {/* Resource list */}
       <div style={styles.list}>
-        {isLoading ? (
+        {loadingStates[selectedResourceType]?.status === 'loading' ? (
           <LoadingProgress loadingStates={loadingStates} />
         ) : sortedResources.length === 0 ? (
           <div style={styles.empty}>
