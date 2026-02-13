@@ -221,6 +221,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
      */
     const fetchOne = async (type: ResourceType, command: string): Promise<void> => {
       const start = Date.now();
+
       try {
         const result = await kube.runCommand(selectedContext, command);
 
@@ -251,58 +252,107 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
           setLastUpdated(now);
         } else {
           const errorMsg = result.stderr || 'Unknown error';
-          const errDuration = Date.now() - start;
           setLoadingStates(prev => ({
             ...prev,
-            [type]: { status: 'error', error: errorMsg, duration: errDuration }
+            [type]: { status: 'error', error: errorMsg, duration: Date.now() - start }
           }));
           console.error(`[ResourceCache] ✗ ${type}: ${errorMsg}`);
         }
       } catch (err) {
-        const duration = Date.now() - start;
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
         setLoadingStates(prev => ({
           ...prev,
-          [type]: { status: 'error', error: errorMsg, duration }
+          [type]: { status: 'error', error: errorMsg, duration: Date.now() - start }
         }));
         console.error(`[ResourceCache] ✗ ${type}: ${errorMsg}`);
       }
     };
 
-    try {
-      // Fire ALL kubectl commands in PARALLEL.
-      // Each fetchOne independently updates resources state as soon as it resolves,
-      // so the UI progressively shows results as they arrive.
-      await Promise.all([
-        fetchOne('pod', 'get pods -A -o json'),
-        fetchOne('deployment', 'get deployments -A -o json'),
-        fetchOne('cronjob', 'get cronjobs -A -o json'),
-        fetchOne('service', 'get services -A -o json'),
-        fetchOne('configmap', 'get configmaps -A -o json'),
-        fetchOne('secret', 'get secrets -A -o json'),
-      ]);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch resources';
-      console.error('[ResourceCache] Failed to fetch resources:', err);
-      setError(errorMessage);
+    /**
+     * Categorize an error message and return a user-friendly description
+     */
+    const categorizeError = (errorMsg: string): { details: string; severity: 'error' | 'warning'; category: string } => {
+      const lowerErr = errorMsg.toLowerCase();
 
-      if (addError) {
-        addError({
-          message: 'Failed to load Kubernetes resources',
-          details: errorMessage.includes('auth') || errorMessage.includes('permission')
-            ? 'Authentication may have expired. Try switching contexts or reconfiguring kubectl.'
-            : errorMessage.includes('connection') || errorMessage.includes('timeout')
-              ? 'Cannot connect to cluster. Check your network and cluster status.'
-              : errorMessage,
-          severity: 'error',
-          dismissible: true,
-          action: {
-            label: 'Retry',
-            callback: () => fetchResources(),
-          },
-        });
+      if (lowerErr.includes('auth') || lowerErr.includes('token') || lowerErr.includes('certificate') || lowerErr.includes('unauthorized') || lowerErr.includes('401')) {
+        return { details: 'Authentication failed. Your credentials may have expired. Try switching contexts or running "kubectl config use-context" to refresh.', severity: 'error', category: 'auth' };
+      } else if (lowerErr.includes('forbidden') || lowerErr.includes('403') || lowerErr.includes('permission')) {
+        return { details: 'Insufficient permissions. Check your RBAC roles for this cluster.', severity: 'warning', category: 'permission' };
+      } else if (lowerErr.includes('connection') || lowerErr.includes('timeout') || lowerErr.includes('refused') || lowerErr.includes('no such host') || lowerErr.includes('network')) {
+        return { details: 'Cannot connect to the cluster. Check your network, VPN, or cluster status.', severity: 'error', category: 'connection' };
+      } else if (lowerErr.includes('not found') || lowerErr.includes('the server doesn\'t have a resource type')) {
+        return { details: 'Some resource types are not available on this cluster.', severity: 'warning', category: 'not_found' };
+      } else {
+        return { details: errorMsg, severity: 'error', category: 'unknown' };
       }
-    }
+    };
+
+    const resourceTypes: ResourceType[] = ['pod', 'deployment', 'cronjob', 'service', 'configmap', 'secret'];
+
+    // Fire ALL kubectl commands in PARALLEL.
+    // Each fetchOne independently updates resources state as soon as it resolves.
+    await Promise.all([
+      fetchOne('pod', 'get pods -A -o json'),
+      fetchOne('deployment', 'get deployments -A -o json'),
+      fetchOne('cronjob', 'get cronjobs -A -o json'),
+      fetchOne('service', 'get services -A -o json'),
+      fetchOne('configmap', 'get configmaps -A -o json'),
+      fetchOne('secret', 'get secrets -A -o json'),
+    ]);
+
+    // After all fetches complete, consolidate errors and show user-friendly banners.
+    // We read loadingStates via a state updater to get the latest values.
+    setLoadingStates(currentStates => {
+      if (addError) {
+        const failedTypes = resourceTypes.filter(t => currentStates[t]?.status === 'error');
+
+        if (failedTypes.length > 0) {
+          // Group failed types by error category
+          const byCategory = new Map<string, { types: ResourceType[]; info: ReturnType<typeof categorizeError> }>();
+          for (const t of failedTypes) {
+            const errMsg = currentStates[t]?.error || 'Unknown error';
+            const info = categorizeError(errMsg);
+            const existing = byCategory.get(info.category);
+            if (existing) {
+              existing.types.push(t);
+            } else {
+              byCategory.set(info.category, { types: [t], info });
+            }
+          }
+
+          // Show one banner per error category (not per resource type)
+          for (const [, { types, info }] of byCategory) {
+            if (types.length === resourceTypes.length) {
+              // All types failed with same cause → single consolidated banner
+              addError({
+                message: 'Failed to load Kubernetes resources',
+                details: info.details,
+                severity: info.severity,
+                dismissible: true,
+                action: {
+                  label: 'Retry All',
+                  callback: () => fetchResources(),
+                },
+              });
+            } else {
+              // Only some types failed → show which ones
+              addError({
+                message: `Failed to load ${types.join(', ')}`,
+                details: info.details,
+                severity: info.severity,
+                dismissible: true,
+                action: {
+                  label: 'Retry',
+                  callback: () => { types.forEach(t => refreshType(t)); },
+                },
+              });
+            }
+          }
+        }
+      }
+
+      return currentStates; // Don't mutate, just read
+    });
   }, [selectedContext, cacheKey, addError]);
 
   // Load from cache or fetch on mount and when context/config changes
@@ -546,6 +596,34 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
           ...prev,
           [type]: { status: 'error', error: errorMsg, duration: errDuration }
         }));
+
+        if (addError) {
+          const lowerErr = errorMsg.toLowerCase();
+          let details: string;
+          let severity: 'error' | 'warning' = 'error';
+
+          if (lowerErr.includes('auth') || lowerErr.includes('token') || lowerErr.includes('certificate') || lowerErr.includes('unauthorized') || lowerErr.includes('401')) {
+            details = 'Authentication failed. Your credentials may have expired. Try switching contexts or running "kubectl config use-context" to refresh.';
+          } else if (lowerErr.includes('forbidden') || lowerErr.includes('403') || lowerErr.includes('permission')) {
+            details = `You don't have permission to list ${type}s in this cluster. Check your RBAC roles.`;
+            severity = 'warning';
+          } else if (lowerErr.includes('connection') || lowerErr.includes('timeout') || lowerErr.includes('refused') || lowerErr.includes('no such host') || lowerErr.includes('network')) {
+            details = 'Cannot connect to the cluster. Check your network, VPN, or cluster status.';
+          } else {
+            details = errorMsg;
+          }
+
+          addError({
+            message: `Failed to load ${type}s`,
+            details,
+            severity,
+            dismissible: true,
+            action: {
+              label: 'Retry',
+              callback: () => refreshType(type),
+            },
+          });
+        }
       }
     } catch (err) {
       const duration = Date.now() - start;
@@ -554,8 +632,21 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         ...prev,
         [type]: { status: 'error', error: errorMsg, duration }
       }));
+
+      if (addError) {
+        addError({
+          message: `Failed to load ${type}s`,
+          details: errorMsg,
+          severity: 'error',
+          dismissible: true,
+          action: {
+            label: 'Retry',
+            callback: () => refreshType(type),
+          },
+        });
+      }
     }
-  }, [selectedContext, cacheKey]);
+  }, [selectedContext, cacheKey, addError]);
 
   const value: ResourceCacheContextType = {
     resources,

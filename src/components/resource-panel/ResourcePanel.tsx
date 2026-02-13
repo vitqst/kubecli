@@ -257,6 +257,22 @@ export function ResourcePanel({
       <div style={styles.list}>
         {loadingStates[selectedResourceType]?.status === 'loading' ? (
           <LoadingProgress loadingStates={loadingStates} />
+        ) : loadingStates[selectedResourceType]?.status === 'error' ? (
+          <div style={styles.errorState}>
+            <div style={styles.errorIcon}>⚠️</div>
+            <div style={styles.errorMessage}>
+              Failed to load {selectedResourceType}s
+            </div>
+            <div style={styles.errorDetails}>
+              {loadingStates[selectedResourceType]?.error || 'Unknown error'}
+            </div>
+            <button
+              style={styles.retryButton}
+              onClick={() => refreshType(selectedResourceType)}
+            >
+              ↻ Retry
+            </button>
+          </div>
         ) : sortedResources.length === 0 ? (
           <div style={styles.empty}>
             {searchQuery ? 'No matching resources' : 'No resources found'}
@@ -480,5 +496,41 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  errorState: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '32px 16px',
+    gap: '8px',
+  },
+  errorIcon: {
+    fontSize: '28px',
+  },
+  errorMessage: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#f14c4c',
+  },
+  errorDetails: {
+    fontSize: '12px',
+    color: '#858585',
+    textAlign: 'center' as const,
+    maxWidth: '400px',
+    fontFamily: 'monospace',
+    whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-word' as const,
+  },
+  retryButton: {
+    marginTop: '8px',
+    padding: '6px 16px',
+    fontSize: '12px',
+    backgroundColor: '#0e639c',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontWeight: 500,
   },
 };
