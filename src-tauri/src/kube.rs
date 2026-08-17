@@ -195,6 +195,21 @@ pub fn run_kubectl(args: Vec<String>, config_path: Option<String>) -> Result<Str
     run_kubectl_with_timeout(args, config_path, Duration::from_secs(120), 2)
 }
 
+fn is_non_retryable_auth_error(message: &str) -> bool {
+    let normalized = message.to_lowercase();
+    normalized.contains("aadsts")
+        || normalized.contains("run 'az login'")
+        || normalized.contains("run az login")
+        || normalized.contains("azureclicredential")
+        || (normalized.contains("kubelogin")
+            && (normalized.contains("token")
+                || normalized.contains("interaction_required")
+                || normalized.contains("interaction required")
+                || normalized.contains("expired")))
+        || normalized.contains("401 unauthorized")
+        || normalized.contains("client to provide credentials")
+}
+
 /// Run kubectl command with timeout and retry logic
 /// If a command times out, it will be retried up to `max_retries` times
 fn run_kubectl_with_timeout(
@@ -214,6 +229,9 @@ fn run_kubectl_with_timeout(
             Ok(output) => return Ok(output),
             Err(e) => {
                 last_error = e;
+                if is_non_retryable_auth_error(&last_error) {
+                    break;
+                }
                 if attempt < max_retries {
                     // Brief pause before retry
                     thread::sleep(Duration::from_millis(100));
@@ -347,4 +365,28 @@ pub fn set_namespace(
         None,
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_non_retryable_auth_error;
+
+    #[test]
+    fn identifies_azure_auth_errors_that_retries_cannot_repair() {
+        for message in [
+            "AADSTS50058: Please run 'az login'",
+            "kubelogin failed: interaction_required",
+            "AzureCLICredential: token expired",
+            "401 Unauthorized: the server has asked for the client to provide credentials",
+        ] {
+            assert!(is_non_retryable_auth_error(message), "{message}");
+        }
+    }
+
+    #[test]
+    fn keeps_retrying_transient_failures() {
+        assert!(!is_non_retryable_auth_error("connection reset by peer"));
+        assert!(!is_non_retryable_auth_error("request timed out"));
+        assert!(!is_non_retryable_auth_error("503 Service Unavailable"));
+    }
 }

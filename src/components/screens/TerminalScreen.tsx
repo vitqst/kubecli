@@ -82,6 +82,7 @@ interface TerminalScreenProps {
   onResourceAction: (actionId: string, resourceType: ResourceType, resourceName: string, customNamespace?: string) => void;
   onEditModeChange: (isEditMode: boolean) => void;
   onGoHome: () => void;
+  authStatus?: React.ReactNode;
 }
 
 
@@ -104,6 +105,7 @@ export function TerminalScreen({
   onResourceAction,
   onEditModeChange,
   onGoHome,
+  authStatus,
 }: TerminalScreenProps) {
   // Tab management (includes per-tab panel state)
   const {
@@ -260,6 +262,7 @@ export function TerminalScreen({
           <span style={styles.configLabel}>Config:</span>
           <span style={styles.configPath}>{kubeconfigPath}</span>
         </div>
+        {authStatus}
         <button
           onClick={refreshAllResources}
           disabled={isRefreshingResources}

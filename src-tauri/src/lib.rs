@@ -1,3 +1,4 @@
+mod azure_auth;
 mod commands;
 mod kube;
 mod terminal;
@@ -12,6 +13,9 @@ pub fn run() {
             set_context,
             set_namespace,
             run_kubectl,
+            check_azure_auth,
+            start_azure_login,
+            cancel_azure_login,
             terminal_create,
             terminal_write,
             terminal_write_silent,
@@ -19,6 +23,11 @@ pub fn run() {
             terminal_close,
             open_new_window,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                azure_auth::cancel_all_azure_logins();
+            }
+        });
 }

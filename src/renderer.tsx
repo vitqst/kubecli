@@ -14,6 +14,26 @@ import { CommandPalette } from './components/CommandPalette';
 import { KubectlPalette } from './components/KubectlPalette';
 import { addRecentCommand } from './commands';
 import { kube as kubeAPI, window as windowAPI } from './api';
+import { AuthSessionProvider, useAuthSession } from './contexts/AuthSessionContext';
+import { AuthStatusButton } from './components/auth/AuthStatusButton';
+import { AzureSessionsDialog } from './components/auth/AzureSessionsDialog';
+import { ReauthenticationDialog } from './components/auth/ReauthenticationDialog';
+
+function AuthRecoveryBridge({
+  selectedContext,
+  reloadNamespaces,
+}: {
+  selectedContext: string;
+  reloadNamespaces: (contextName: string) => Promise<void>;
+}) {
+  const { registerRecovery } = useAuthSession();
+
+  useEffect(() => registerRecovery(() => {
+    if (selectedContext) return reloadNamespaces(selectedContext);
+  }), [registerRecovery, reloadNamespaces, selectedContext]);
+
+  return null;
+}
 
 function App() {
   // State
@@ -324,7 +344,9 @@ function App() {
 
   return (
     <ErrorProvider>
-      <ResourceCacheProvider selectedContext={selectedContext} kubeconfigPath={kubeconfigPath}>
+      <AuthSessionProvider configPath={kubeconfigPath} selectedContext={selectedContext}>
+        <AuthRecoveryBridge selectedContext={selectedContext} reloadNamespaces={loadNamespaces} />
+        <ResourceCacheProvider selectedContext={selectedContext} kubeconfigPath={kubeconfigPath}>
         <ErrorBanner />
         <div style={styles.container}>
           <style>{`
@@ -400,6 +422,7 @@ function App() {
           onResourceAction={handleResourceAction}
           onEditModeChange={handleEditModeChange}
           onGoHome={handleGoHome}
+          authStatus={<AuthStatusButton />}
         />
       ) : (
         <HomeScreen
@@ -411,8 +434,12 @@ function App() {
           onConfigChange={handleConfigChange}
           onContextChange={handleContextChange}
           onGetStarted={handleGetStarted}
+          authStatus={<AuthStatusButton />}
         />
       )}
+
+          <AzureSessionsDialog />
+          <ReauthenticationDialog />
 
           {/* Command Palette */}
           <CommandPalette
@@ -442,7 +469,8 @@ function App() {
             />
           )}
         </div>
-      </ResourceCacheProvider>
+        </ResourceCacheProvider>
+      </AuthSessionProvider>
     </ErrorProvider>
   );
 }
@@ -475,9 +503,7 @@ console.log('[Renderer] Root container found, creating React root...');
 
 root.render(
   <ErrorBoundary>
-    <ResourceCacheProvider selectedContext="">
-      <App />
-    </ResourceCacheProvider>
+    <App />
   </ErrorBoundary>
 );
 
