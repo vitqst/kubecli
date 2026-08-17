@@ -27,6 +27,18 @@ export interface RemoveLeafResult {
 
 const MIN_RATIO = 0.05;
 const MAX_RATIO = 0.95;
+export const SPLIT_HANDLE_SIZE = 8;
+export const MIN_PANE_WIDTH = 240;
+export const MIN_PANE_HEIGHT = 120;
+
+export function minimumPaneExtent(node: LayoutNode, direction: SplitNode['direction']): number {
+  if (node.kind === 'leaf') return direction === 'row' ? MIN_PANE_WIDTH : MIN_PANE_HEIGHT;
+  const first = minimumPaneExtent(node.first, direction);
+  const second = minimumPaneExtent(node.second, direction);
+  return node.direction === direction
+    ? first + SPLIT_HANDLE_SIZE + second
+    : Math.max(first, second);
+}
 
 export function findLeaf(node: LayoutNode, paneId: PaneId): PaneLeaf | undefined {
   if (node.kind === 'leaf') return node.id === paneId ? node : undefined;

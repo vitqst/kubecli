@@ -135,6 +135,7 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
     // Store cleanup functions for async listeners
     let unlistenData: (() => void) | null = null;
     let unlistenExit: (() => void) | null = null;
+    let readyTimer: ReturnType<typeof setTimeout> | null = null;
 
     // Create xterm instance
     const xterm = new XTerm({
@@ -203,7 +204,8 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         xtermRef.current.write(payload.data);
       }
     }).then((unlisten) => {
-      unlistenData = unlisten;
+      if (isMountedRef.current) unlistenData = unlisten;
+      else unlisten();
     });
 
     terminalApi.onExit((termId) => {
@@ -215,7 +217,8 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
         if (onExit) onExit(0);
       }
     }).then((unlisten) => {
-      unlistenExit = unlisten;
+      if (isMountedRef.current) unlistenExit = unlisten;
+      else unlisten();
     });
 
     // Create backend terminal with initial environment variables
@@ -224,11 +227,16 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
     terminalApi
       .create(undefined, env)
       .then((termId) => {
+        if (!isMountedRef.current) {
+          void terminalApi.close(termId);
+          return;
+        }
         console.log(`[Terminal ${id}] Created successfully with backend ID: ${termId}`);
         terminalIdRef.current = termId;
 
         // Wait for backend initialization to complete
-        setTimeout(() => {
+        readyTimer = setTimeout(() => {
+          if (!isMountedRef.current) return;
           setIsReady(true);
           if (onReady) onReady();
         }, 300);
@@ -366,6 +374,7 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
     return () => {
       console.log(`[Terminal ${id}] Cleaning up...`);
       isMountedRef.current = false;
+      if (readyTimer) clearTimeout(readyTimer);
 
       // Remove event listeners first
       window.removeEventListener('resize', handleResize);

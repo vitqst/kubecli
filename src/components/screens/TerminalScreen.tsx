@@ -76,13 +76,21 @@ interface TerminalScreenProps {
   isInEditMode: boolean;
   isConfigChanging: boolean;
   pendingCommand?: string | null;
+  pendingCommandTargetTabId?: string | null;
   pendingRefresh?: { type: ResourceType; delayMs: number } | null;
   onCommandExecuted?: () => void;
   onConfigChange: (path: string) => void;
   onContextChange: (context: string) => void;
   onNamespaceChange: (namespace: string) => void;
-  onResourceAction: (actionId: string, resourceType: ResourceType, resourceName: string, customNamespace?: string) => void;
+  onResourceAction: (
+    actionId: string,
+    resourceType: ResourceType,
+    resourceName: string,
+    customNamespace?: string,
+    targetTabId?: string,
+  ) => void;
   onEditModeChange: (isEditMode: boolean) => void;
+  onActiveTabChange?: (tabId: string) => void;
   onGoHome: () => void;
   authStatus?: React.ReactNode;
 }
@@ -99,6 +107,7 @@ export function TerminalScreen({
   isInEditMode,
   isConfigChanging,
   pendingCommand,
+  pendingCommandTargetTabId,
   pendingRefresh,
   onCommandExecuted,
   onConfigChange,
@@ -106,6 +115,7 @@ export function TerminalScreen({
   onNamespaceChange,
   onResourceAction,
   onEditModeChange,
+  onActiveTabChange,
   onGoHome,
   authStatus,
 }: TerminalScreenProps) {
@@ -161,30 +171,41 @@ export function TerminalScreen({
     closePanel,
   } = useWorkspaceLayout();
 
+  React.useEffect(() => onActiveTabChange?.(activeTabId), [activeTabId, onActiveTabChange]);
+
   const [pendingCommandTarget, setPendingCommandTarget] = useState<string | null>(null);
   const pendingCommandTargetRef = React.useRef<string | null>(null);
-  const previousPendingCommandRef = React.useRef<string | null>(null);
+  const previousPendingCommandKeyRef = React.useRef<string | null>(null);
+  const pendingRefreshRef = React.useRef<{ type: ResourceType; delayMs: number } | null>(null);
 
   React.useEffect(() => {
     if (!pendingCommand) {
-      previousPendingCommandRef.current = null;
+      previousPendingCommandKeyRef.current = null;
       pendingCommandTargetRef.current = null;
+      pendingRefreshRef.current = null;
       setPendingCommandTarget(null);
       return;
     }
 
-    if (previousPendingCommandRef.current === pendingCommand) return;
-    previousPendingCommandRef.current = pendingCommand;
-    const target = pendingCommandTargetRef.current ?? activeTabId;
+    const target = pendingCommandTargetTabId ?? pendingCommandTargetRef.current ?? activeTabId;
+    if (!tabs[target]) {
+      previousPendingCommandKeyRef.current = null;
+      pendingCommandTargetRef.current = null;
+      pendingRefreshRef.current = null;
+      setPendingCommandTarget(null);
+      onCommandExecuted?.();
+      return;
+    }
+
+    const requestKey = `${target}\0${pendingCommand}`;
+    if (previousPendingCommandKeyRef.current === requestKey) return;
+    previousPendingCommandKeyRef.current = requestKey;
     pendingCommandTargetRef.current = target;
     setPendingCommandTarget(target);
-  }, [activeTabId, pendingCommand]);
+  }, [activeTabId, onCommandExecuted, pendingCommand, pendingCommandTargetTabId, tabs]);
 
   // Global resource cache refresh
   const { refresh: refreshAllResources, refreshType, isLoading: isRefreshingResources } = useResourceCache();
-
-  // Store pending refresh to trigger after command completes
-  const pendingRefreshRef = React.useRef<{ type: ResourceType; delayMs: number } | null>(null);
 
   // Update pending refresh ref when prop changes
   React.useEffect(() => {
@@ -238,10 +259,7 @@ export function TerminalScreen({
       resourceRef: { type: resourceType, name: resourceName, namespace: ns, action: actionId },
     }));
 
-    pendingCommandTargetRef.current = activeTabId;
-    setPendingCommandTarget(activeTabId);
-
-    onResourceAction(actionId, resourceType, resourceName, ns);
+    onResourceAction(actionId, resourceType, resourceName, ns, activeTabId);
   }, [activeTabId, onResourceAction, selectedNamespace, updateTab]);
 
   // Duplicate dialog is no longer needed (no new tabs on action)

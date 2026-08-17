@@ -5,13 +5,19 @@ interface SplitHandleProps {
   ratio: number;
   onPreviewRatio: (ratio: number) => void;
   onResize: (ratio: number) => void;
+  minimumFirstPixels?: number;
+  minimumSecondPixels?: number;
 }
+
+const HANDLE_SIZE_PX = 8;
 
 export function SplitHandle({
   direction,
   ratio,
   onPreviewRatio,
   onResize,
+  minimumFirstPixels,
+  minimumSecondPixels,
 }: SplitHandleProps) {
   const draggingRef = useRef(false);
   const frameRef = useRef<number | null>(null);
@@ -23,10 +29,15 @@ export function SplitHandle({
     const size = direction === 'row' ? rect.width : rect.height;
     if (size <= 0) return ratio;
 
-    const offset = direction === 'row' ? clientX - rect.left : clientY - rect.top;
-    const minimumPixels = direction === 'row' ? 240 : 120;
-    const minimumRatio = Math.min(0.5, minimumPixels / size);
-    return Math.min(1 - minimumRatio, Math.max(minimumRatio, offset / size));
+    const usableSize = Math.max(1, size - HANDLE_SIZE_PX);
+    const offset = (direction === 'row' ? clientX - rect.left : clientY - rect.top) - HANDLE_SIZE_PX / 2;
+    const defaultMinimum = direction === 'row' ? 240 : 120;
+    const firstMinimum = minimumFirstPixels ?? defaultMinimum;
+    const secondMinimum = minimumSecondPixels ?? defaultMinimum;
+    const fits = firstMinimum + secondMinimum <= usableSize;
+    const minimumRatio = fits ? firstMinimum / usableSize : firstMinimum / (firstMinimum + secondMinimum);
+    const maximumRatio = fits ? 1 - secondMinimum / usableSize : minimumRatio;
+    return Math.min(maximumRatio, Math.max(minimumRatio, offset / usableSize));
   };
 
   const cancelFrame = () => {
@@ -45,7 +56,6 @@ export function SplitHandle({
       aria-valuemin={5}
       aria-valuemax={95}
       aria-valuenow={Math.round(ratio * 100)}
-      tabIndex={0}
       onPointerDown={(event) => {
         event.preventDefault();
         draggingRef.current = true;

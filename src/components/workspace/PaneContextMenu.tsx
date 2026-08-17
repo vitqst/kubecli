@@ -65,7 +65,13 @@ export function PaneContextMenu({
   }, [onClose]);
 
   const run = (action: () => void | Promise<void>, restoreTerminalFocus = false) => {
-    void action();
+    try {
+      void Promise.resolve(action()).catch((error) => {
+        console.error('[PaneContextMenu] Action failed:', error);
+      });
+    } catch (error) {
+      console.error('[PaneContextMenu] Action failed:', error);
+    }
     onClose();
     if (restoreTerminalFocus) requestAnimationFrame(() => terminalRequest?.focus?.());
   };

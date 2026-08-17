@@ -26,7 +26,17 @@ type ScreenshotCase =
   | 'min-size';
 
 const fixtureCase = (new URLSearchParams(window.location.search).get('case') ?? 'nested') as ScreenshotCase;
-const baseLayout = fixture.layout as unknown as LayoutNode;
+const baseLayout: LayoutNode = {
+  ...fixture.layout,
+  id: 'split-workspace',
+  first: { ...fixture.layout.first, tabIds: [...fixture.layout.first.tabIds] },
+  second: {
+    ...fixture.layout.second,
+    id: 'split-secondary',
+    first: { ...fixture.layout.second.first, tabIds: [...fixture.layout.second.first.tabIds] },
+    second: { ...fixture.layout.second.second, tabIds: [...fixture.layout.second.second.tabIds] },
+  },
+};
 
 function leaf(id: PaneId, tabId: TabId): PaneLeaf {
   return { kind: 'leaf', id, tabIds: [tabId], activeTabId: tabId };

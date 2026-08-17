@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { LayoutNode, PaneId, PaneLeaf, TabId } from '../../workspace/layoutModel';
+import { minimumPaneExtent, type LayoutNode, type PaneId, type PaneLeaf, type TabId } from '../../workspace/layoutModel';
 import type { Tab } from '../../workspace/types';
 import { PaneHeader } from './PaneHeader';
 import { SplitHandle } from './SplitHandle';
@@ -10,6 +10,7 @@ export interface PaneNodeProps {
   tabs: Record<TabId, Tab>;
   activePaneId: PaneId;
   zoomedPaneId: PaneId | null;
+  canCloseLastTab: boolean;
   onFocusPane: (paneId: PaneId) => void;
   onActivateTab: (paneId: PaneId, tabId: TabId) => void;
   onCloseTab: (paneId: PaneId, tabId: TabId) => void;
@@ -42,13 +43,15 @@ function SplitPaneView(props: PaneNodeProps & { node: Extract<LayoutNode, { kind
     >
       <div
         className="workspace-split-child workspace-split-child--first"
-        style={{ flexBasis: `${previewRatio * 100}%` }}
+        style={{ flexBasis: `calc((100% - 8px) * ${previewRatio})` }}
       >
         <PaneNode {...props} node={node.first} />
       </div>
       <SplitHandle
         direction={node.direction}
         ratio={node.ratio}
+        minimumFirstPixels={minimumPaneExtent(node.first, node.direction)}
+        minimumSecondPixels={minimumPaneExtent(node.second, node.direction)}
         onPreviewRatio={setPreviewRatio}
         onResize={(ratio) => props.onResizeSplit(node.id, ratio)}
       />
@@ -64,6 +67,7 @@ function PaneLeafView({
   tabs,
   activePaneId,
   zoomedPaneId,
+  canCloseLastTab,
   onFocusPane,
   onActivateTab,
   onCloseTab,
@@ -104,6 +108,7 @@ function PaneLeafView({
         tabs={paneTabs}
         activeTabId={pane.activeTabId}
         focused={focused}
+        canCloseTabs={paneTabs.length > 1 || canCloseLastTab}
         onFocusPane={onFocusPane}
         onActivateTab={onActivateTab}
         onCloseTab={onCloseTab}

@@ -8,6 +8,7 @@ interface PaneHeaderProps {
   tabs: Tab[];
   activeTabId: TabId;
   focused: boolean;
+  canCloseTabs: boolean;
   onFocusPane: (paneId: PaneId) => void;
   onActivateTab: (paneId: PaneId, tabId: TabId) => void;
   onCloseTab: (paneId: PaneId, tabId: TabId) => void;
@@ -19,6 +20,7 @@ export function PaneHeader({
   tabs,
   activeTabId,
   focused,
+  canCloseTabs,
   onFocusPane,
   onActivateTab,
   onCloseTab,
@@ -42,6 +44,7 @@ export function PaneHeader({
             onFocusPane(paneId);
             onAddTab(paneId);
           }}
+          canCloseTabs={canCloseTabs}
         />
       </div>
       {focused && <span className="workspace-pane-focus-label">FOCUSED</span>}

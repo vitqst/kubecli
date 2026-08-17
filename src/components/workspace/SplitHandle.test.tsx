@@ -56,12 +56,12 @@ describe('SplitHandle', () => {
     fireEvent.pointerMove(handle, { pointerId: 7, clientX: 700, clientY: 100 });
 
     expect(handle.setPointerCapture).toHaveBeenCalledWith(7);
-    expect(onPreviewRatio).toHaveBeenLastCalledWith(0.7);
+    expect(onPreviewRatio).toHaveBeenLastCalledWith((700 - 4) / 992);
     expect(onResize).not.toHaveBeenCalled();
 
     fireEvent.pointerUp(handle, { pointerId: 7, clientX: 700, clientY: 100 });
     expect(onResize).toHaveBeenCalledTimes(1);
-    expect(onResize).toHaveBeenCalledWith(0.7);
+    expect(onResize).toHaveBeenCalledWith((700 - 4) / 992);
   });
 
   it('clamps row resizing to a 240px minimum for both children', () => {
@@ -69,10 +69,10 @@ describe('SplitHandle', () => {
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientX: 500 });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 10 });
-    expect(onPreviewRatio).toHaveBeenLastCalledWith(0.24);
+    expect(onPreviewRatio).toHaveBeenLastCalledWith(240 / 992);
 
     fireEvent.pointerUp(handle, { pointerId: 1, clientX: 999 });
-    expect(onResize).toHaveBeenLastCalledWith(0.76);
+    expect(onResize).toHaveBeenLastCalledWith(1 - 240 / 992);
   });
 
   it('clamps column resizing to a 120px minimum for both children', () => {
@@ -80,10 +80,10 @@ describe('SplitHandle', () => {
 
     fireEvent.pointerDown(handle, { pointerId: 2, clientY: 300 });
     fireEvent.pointerMove(handle, { pointerId: 2, clientY: 10 });
-    expect(onPreviewRatio).toHaveBeenLastCalledWith(0.2);
+    expect(onPreviewRatio).toHaveBeenLastCalledWith(120 / 592);
 
     fireEvent.pointerUp(handle, { pointerId: 2, clientY: 599 });
-    expect(onResize).toHaveBeenLastCalledWith(0.8);
+    expect(onResize).toHaveBeenLastCalledWith(1 - 120 / 592);
   });
 
   it('restores the committed ratio when a drag is cancelled', () => {

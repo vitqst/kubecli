@@ -363,6 +363,30 @@ describe('Terminal Component', () => {
   });
 
   describe('Cleanup', () => {
+    it('closes late-created terminals and unregisters listeners resolved after unmount', async () => {
+      let resolveCreate!: (id: string) => void;
+      let resolveListen!: (unlisten: () => void) => void;
+      const lateUnlisten = vi.fn();
+      const createPromise = new Promise<string>((resolve) => { resolveCreate = resolve; });
+      const listenPromise = new Promise<() => void>((resolve) => { resolveListen = resolve; });
+      mockInvoke.mockImplementation((cmd: string) => cmd === 'terminal_create'
+        ? createPromise
+        : Promise.resolve());
+      mockListen.mockReturnValue(listenPromise);
+
+      const { unmount } = render(<Terminal id="late" />);
+      unmount();
+
+      await act(async () => {
+        resolveListen(lateUnlisten);
+        resolveCreate('term_late');
+        await Promise.resolve();
+      });
+
+      expect(lateUnlisten).toHaveBeenCalledTimes(2);
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_close', { terminalId: 'term_late' });
+    });
+
     it('should unregister listeners on unmount', async () => {
       const { unmount } = render(<Terminal id="test" />);
 

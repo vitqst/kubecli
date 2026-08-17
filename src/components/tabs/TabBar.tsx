@@ -16,6 +16,7 @@ export interface TabBarProps {
   onTabClose: (id: string) => void;
   /** Callback when the add tab button is clicked */
   onAddTab: () => void;
+  canCloseTabs?: boolean;
 }
 
 /**
@@ -28,6 +29,7 @@ export function TabBar({
   onTabClick,
   onTabClose,
   onAddTab,
+  canCloseTabs = false,
 }: TabBarProps) {
   return (
     <div style={styles.tabBar} role="tablist" aria-label="Terminal tabs">
@@ -52,7 +54,7 @@ export function TabBar({
           title={tab.label}
         >
           <span style={styles.tabLabel}>{tab.label}</span>
-          {tab.id !== 'default' && (
+          {canCloseTabs && (
             <button
               style={styles.closeButton}
               onClick={(e) => {

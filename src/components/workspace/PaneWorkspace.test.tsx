@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import type { LayoutNode } from '../../workspace/layoutModel';
 import { DEFAULT_PANEL_STATE, type Tab } from '../../workspace/types';
@@ -124,5 +125,35 @@ describe('PaneWorkspace', () => {
     expect(shellPane).toHaveClass('workspace-pane--zoomed');
     expect(screen.getByTestId('terminal-api')).toBeInTheDocument();
     expect(screen.getByTestId('terminal-shell')).toBeInTheDocument();
+  });
+
+  it('restores keyboard focus to the active terminal after a pane action', async () => {
+    function Harness() {
+      const [zoomedPaneId, setZoomedPaneId] = useState<string | null>(null);
+      return (
+        <PaneWorkspace
+          root={root}
+          tabs={tabs}
+          activePaneId="pane-api"
+          zoomedPaneId={zoomedPaneId}
+          onFocusPane={vi.fn()}
+          onActivateTab={vi.fn()}
+          onCloseTab={vi.fn()}
+          onAddTab={vi.fn()}
+          onResizeSplit={vi.fn()}
+          onSplitPane={vi.fn()}
+          onClosePane={vi.fn()}
+          onToggleZoom={(paneId) => setZoomedPaneId(paneId)}
+          renderTab={(currentTab) => <textarea aria-label={`${currentTab.label} input`} />}
+        />
+      );
+    }
+
+    render(<Harness />);
+    const pane = screen.getAllByRole('group', { name: 'Terminal pane api-logs' })[0];
+    fireEvent.contextMenu(pane);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Zoom Pane' }));
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'api-logs input' })).toHaveFocus());
   });
 });

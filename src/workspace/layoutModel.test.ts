@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectLeaves,
   findLeaf,
+  minimumPaneExtent,
   removeLeaf,
   replaceNode,
   resizeSplit,
@@ -18,6 +19,14 @@ const leaf = (id: string, tabId = `tab-${id}`): PaneLeaf => ({
 });
 
 describe('layoutModel', () => {
+  it('derives recursive minimum extents for nested splits', () => {
+    const inner = splitLeaf(leaf('b'), 'b', 'row', leaf('c'), 'inner');
+    const nested: LayoutNode = { kind: 'split', id: 'outer', direction: 'row', ratio: 0.5, first: leaf('a'), second: inner };
+
+    expect(minimumPaneExtent(nested, 'row')).toBe(736);
+    expect(minimumPaneExtent(nested, 'column')).toBe(120);
+  });
+
   it('splits a leaf to the right and keeps the existing pane first', () => {
     const root = leaf('left');
 

@@ -168,4 +168,59 @@ describe('TerminalScreen workspace integration', () => {
     });
     expect(launchedFromPane).toHaveAccessibleName('Terminal pane api-server-7d9c');
   });
+
+  it('honors an explicit target captured before a delayed action is confirmed', async () => {
+    const view = render(<TerminalScreen {...defaultProps} />);
+    fireEvent.contextMenu(screen.getByRole('group', { name: 'Terminal pane Terminal' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Split Right' }));
+
+    const panes = screen.getAllByRole('group', { name: 'Terminal pane Terminal' });
+    const targetTerminal = within(panes[1]).getByTestId(/^terminal-/);
+    const targetTabId = targetTerminal.dataset.testid!.replace('terminal-', '');
+    fireEvent.pointerDown(panes[0]);
+
+    view.rerender(
+      <TerminalScreen
+        {...defaultProps}
+        pendingCommand="kubectl describe pod api-server-7d9c"
+        pendingCommandTargetTabId={targetTabId}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(targetTerminal).toHaveAttribute(
+        'data-pending-command',
+        'kubectl describe pod api-server-7d9c',
+      );
+    });
+    expect(within(panes[0]).getByTestId(/^terminal-/)).toHaveAttribute('data-pending-command', '');
+  });
+
+  it('clears a delayed command instead of redirecting it after its target pane closes', async () => {
+    const onCommandExecuted = vi.fn();
+    const view = render(
+      <TerminalScreen {...defaultProps} onCommandExecuted={onCommandExecuted} />,
+    );
+    fireEvent.contextMenu(screen.getByRole('group', { name: 'Terminal pane Terminal' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Split Right' }));
+
+    const targetPane = screen.getAllByRole('group', { name: 'Terminal pane Terminal' })[1];
+    const targetTabId = within(targetPane)
+      .getByTestId(/^terminal-/)
+      .dataset.testid!.replace('terminal-', '');
+    fireEvent.contextMenu(targetPane);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Close Pane' }));
+
+    view.rerender(
+      <TerminalScreen
+        {...defaultProps}
+        onCommandExecuted={onCommandExecuted}
+        pendingCommand="kubectl delete pod api-server-7d9c"
+        pendingCommandTargetTabId={targetTabId}
+      />,
+    );
+
+    await waitFor(() => expect(onCommandExecuted).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('terminal-default')).toHaveAttribute('data-pending-command', '');
+  });
 });
