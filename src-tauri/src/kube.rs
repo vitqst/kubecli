@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use std::thread;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
+use crate::azure_auth;
 
 // Cache for available kubeconfig files to avoid rescanning on every context switch
 lazy_static! {
@@ -283,6 +284,16 @@ fn run_kubectl_once(
 
     if let Some(ref path) = config_path {
         cmd.env("KUBECONFIG", path);
+
+        if let Some(context_name) = args
+            .iter()
+            .position(|argument| argument == "--context")
+            .and_then(|index| args.get(index + 1))
+        {
+            if let Some(tenant_id) = azure_auth::resolve_context_tenant(path, context_name) {
+                cmd.env("AZURE_TENANT_ID", tenant_id);
+            }
+        }
     }
 
     cmd.args(args);
@@ -316,6 +327,23 @@ fn run_kubectl_once(
                     .map_err(|e| format!("Invalid UTF-8 in output: {}", e))
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
+                if is_non_retryable_auth_error(&stderr) {
+                    let context = args
+                        .iter()
+                        .position(|argument| argument == "--context")
+                        .and_then(|index| args.get(index + 1))
+                        .cloned()
+                        .unwrap_or_else(|| "<implicit>".to_string());
+                    azure_auth::log_auth_diagnostic(
+                        "kubectl.auth_failure",
+                        &[
+                            ("context", context),
+                            ("elapsed_ms", elapsed.as_millis().to_string()),
+                            ("error_kind", "credentials_required".to_string()),
+                            ("stderr_bytes", stderr.len().to_string()),
+                        ],
+                    );
+                }
                 Err(format!("kubectl error: {}", stderr))
             }
         }

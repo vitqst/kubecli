@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { useAuthSession } from '../../contexts/AuthSessionContext';
 import { authStyles as styles } from './authStyles';
 
 export function ReauthenticationDialog() {
   const session = useAuthSession();
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [isRechecking, setIsRechecking] = useState(false);
   const { status, loginProgress: progress } = session;
 
   useEffect(() => {
@@ -32,6 +36,35 @@ export function ReauthenticationDialog() {
     await navigator.clipboard?.writeText(progress.userCode);
     setCopied(true);
   };
+  const openSignInPage = async () => {
+    if (!progress?.verificationUrl) return;
+    setLinkError(null);
+    try {
+      await openUrl(progress.verificationUrl);
+    } catch {
+      setLinkError('KubeCLI could not open your default browser. Copy the link and open it manually.');
+    }
+  };
+  const copySignInLink = async () => {
+    if (!progress?.verificationUrl) return;
+    setLinkError(null);
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(progress.verificationUrl);
+      setLinkCopied(true);
+    } catch {
+      setLinkError('KubeCLI could not copy the link. Select the URL below and copy it manually.');
+    }
+  };
+  const recheckAccess = async () => {
+    setIsRechecking(true);
+    try {
+      const result = await session.checkNow();
+      if (result?.state === 'active') session.dismissReauth();
+    } finally {
+      setIsRechecking(false);
+    }
+  };
 
   return (
     <div style={styles.overlay}>
@@ -50,7 +83,7 @@ export function ReauthenticationDialog() {
                 : isWaitingBrowser
                   ? 'A secure Microsoft sign-in window should be open. Return here when finished.'
                   : isFailed
-                    ? progress.safeMessage || 'Azure sign-in did not complete.'
+                    ? progress.status?.safeMessage || progress.safeMessage || 'Azure sign-in did not complete.'
                     : 'Your Microsoft sign-in for this cluster is no longer valid. Your terminal and kubeconfig are unchanged.'}
             </p>
           </div>
@@ -66,8 +99,16 @@ export function ReauthenticationDialog() {
             <span style={styles.label}>Microsoft device code</span>
             <div style={styles.code}>{progress.userCode || 'Preparing…'}</div>
             {progress.userCode && <button type="button" onClick={() => void copyCode()} style={styles.button}>{copied ? 'Copied' : 'Copy code'}</button>}
-            {' '}
-            {progress.verificationUrl && <a href={progress.verificationUrl} target="_blank" rel="noreferrer" style={{ ...styles.primaryButton, display: 'inline-block', textDecoration: 'none' }}>Open sign-in page</a>}
+            {progress.verificationUrl && (
+              <>
+                <div style={localStyles.linkActions}>
+                  <button type="button" onClick={() => void openSignInPage()} style={styles.primaryButton}>Open browser</button>
+                  <button type="button" onClick={() => void copySignInLink()} style={styles.button}>{linkCopied ? 'Link copied' : 'Copy link'}</button>
+                </div>
+                <div style={localStyles.url} title={progress.verificationUrl}>{progress.verificationUrl}</div>
+                {linkError && <div role="alert" style={localStyles.error}>{linkError}</div>}
+              </>
+            )}
           </div>
         )}
 
@@ -79,12 +120,17 @@ export function ReauthenticationDialog() {
         )}
 
         <div style={styles.actions}>
-          <button type="button" onClick={progress ? cancelAndClose : session.dismissReauth} style={styles.button}>{progress ? 'Cancel' : 'Not now'}</button>
+          <button type="button" onClick={isFailed ? session.dismissReauth : progress ? cancelAndClose : session.dismissReauth} style={styles.button}>{isFailed ? 'Close' : progress ? 'Cancel' : 'Not now'}</button>
           <div style={styles.actionsRight}>
             {isDevice ? (
               <button type="button" onClick={() => void session.startLogin('browser')} style={styles.button}>Back to browser login</button>
             ) : isWaitingBrowser ? (
               <button type="button" onClick={() => void session.startLogin('deviceCode')} style={styles.button}>Use device code instead</button>
+            ) : isFailed ? (
+              <>
+                <button type="button" onClick={() => void session.startLogin('deviceCode')} style={styles.button}>Sign in again</button>
+                <button type="button" autoFocus disabled={isRechecking} onClick={() => void recheckAccess()} style={styles.primaryButton}>{isRechecking ? 'Checking…' : 'Check access again'}</button>
+              </>
             ) : (
               <>
                 <button type="button" onClick={() => void session.startLogin('deviceCode')} style={styles.button}>Use device code</button>
@@ -101,4 +147,7 @@ export function ReauthenticationDialog() {
 const localStyles: Record<string, React.CSSProperties> = {
   progressTrack: { height: '5px', marginBottom: '10px', overflow: 'hidden', borderRadius: '999px', background: '#393e43' },
   progressBar: { width: '62%', height: '100%', borderRadius: '999px', background: '#1683c5' },
+  linkActions: { display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '10px' },
+  url: { marginTop: '10px', color: '#9fa7ad', fontSize: '10px', overflowWrap: 'anywhere', userSelect: 'text' },
+  error: { marginTop: '10px', color: '#f2a39b', fontSize: '11px', lineHeight: 1.4 },
 };

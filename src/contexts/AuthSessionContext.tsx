@@ -70,6 +70,7 @@ export function AuthSessionProvider({
   const statusRef = useRef(status);
   statusRef.current = status;
   const activeLoginIdRef = useRef<string | null>(null);
+  const pendingProgressRef = useRef(new Map<string, AzureAuthProgress>());
   const checkingRef = useRef<Promise<AzureSessionStatus | null> | null>(null);
   const requestSequenceRef = useRef(0);
   const recoveryCallbacksRef = useRef(new Set<() => void | Promise<void>>());
@@ -133,8 +134,25 @@ export function AuthSessionProvider({
     setIsReauthOpen(false);
     setIsSessionsOpen(false);
     activeLoginIdRef.current = null;
+    pendingProgressRef.current.clear();
     void checkNow();
   }, [checkNow]);
+
+  const applyLoginProgress = useCallback((progress: AzureAuthProgress) => {
+    setLoginProgress(progress);
+    if (progress.phase === 'verified' && progress.status) {
+      setStatus(progress.status);
+      activeLoginIdRef.current = null;
+      setIsReauthOpen(false);
+      setIsSessionsOpen(false);
+      for (const callback of recoveryCallbacksRef.current) {
+        void callback();
+      }
+    }
+    if (progress.phase === 'cancelled') {
+      activeLoginIdRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (status.state !== 'active' && status.state !== 'expiringSoon') return;
@@ -152,20 +170,12 @@ export function AuthSessionProvider({
     let disposed = false;
     let unlisten: undefined | (() => void);
     void auth.onProgress((progress) => {
-      if (disposed || progress.loginId !== activeLoginIdRef.current) return;
-      setLoginProgress(progress);
-      if (progress.phase === 'verified' && progress.status) {
-        setStatus(progress.status);
-        activeLoginIdRef.current = null;
-        setIsReauthOpen(false);
-        setIsSessionsOpen(false);
-        for (const callback of recoveryCallbacksRef.current) {
-          void callback();
-        }
+      if (disposed) return;
+      if (progress.loginId !== activeLoginIdRef.current) {
+        pendingProgressRef.current.set(progress.loginId, progress);
+        return;
       }
-      if (progress.phase === 'cancelled') {
-        activeLoginIdRef.current = null;
-      }
+      applyLoginProgress(progress);
     }).then((cleanup) => {
       if (disposed) cleanup();
       else unlisten = cleanup;
@@ -174,7 +184,7 @@ export function AuthSessionProvider({
       disposed = true;
       unlisten?.();
     };
-  }, []);
+  }, [applyLoginProgress]);
 
   const startLogin = useCallback(async (method: AzureLoginMethod) => {
     if (!status.tenantId || !configPath || !selectedContext) {
@@ -189,6 +199,10 @@ export function AuthSessionProvider({
       setIsReauthOpen(true);
       return;
     }
+
+    const previousLoginId = activeLoginIdRef.current;
+    activeLoginIdRef.current = null;
+    if (previousLoginId) await auth.cancelLogin(previousLoginId);
 
     setIsReauthOpen(true);
     setLoginProgress({
@@ -208,6 +222,11 @@ export function AuthSessionProvider({
       });
       activeLoginIdRef.current = started.loginId;
       setLoginProgress((current) => current ? { ...current, loginId: started.loginId } : current);
+      const pending = pendingProgressRef.current.get(started.loginId);
+      if (pending) {
+        pendingProgressRef.current.delete(started.loginId);
+        applyLoginProgress(pending);
+      }
     } catch (error) {
       activeLoginIdRef.current = null;
       setLoginProgress({
@@ -219,7 +238,7 @@ export function AuthSessionProvider({
         status: null,
       });
     }
-  }, [configPath, selectedContext, status.tenantId]);
+  }, [applyLoginProgress, configPath, selectedContext, status.tenantId]);
 
   const cancelLogin = useCallback(async () => {
     const loginId = activeLoginIdRef.current;
@@ -229,7 +248,7 @@ export function AuthSessionProvider({
   }, []);
 
   const reportAuthFailure = useCallback((message: string) => {
-    if (statusRef.current.loginMode !== 'azurecli') return;
+    if (!['azurecli', 'devicecode', 'interactive'].includes(statusRef.current.loginMode || '')) return;
     setStatus((current) => ({
       ...current,
       state: 'expired',

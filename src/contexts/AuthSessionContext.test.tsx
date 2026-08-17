@@ -50,7 +50,9 @@ function Consumer({ recovery }: { recovery?: () => void }) {
     <div>
       <span data-testid="state">{session.status.state}</span>
       <span data-testid="reauth">{String(session.isReauthOpen)}</span>
+      <span data-testid="progress-code">{session.loginProgress?.userCode || ''}</span>
       <button onClick={() => session.startLogin('browser')}>browser</button>
+      <button onClick={() => session.startLogin('deviceCode')}>device code</button>
       <button onClick={() => session.reportAuthFailure("Please run 'az login'")}>auth failure</button>
     </div>
   );
@@ -85,6 +87,27 @@ describe('AuthSessionProvider', () => {
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('active'));
 
     fireEvent.click(screen.getByRole('button', { name: 'auth failure' }));
+    fireEvent.click(screen.getByRole('button', { name: 'auth failure' }));
+
+    expect(screen.getByTestId('state')).toHaveTextContent('expired');
+    expect(screen.getByTestId('reauth')).toHaveTextContent('true');
+  });
+
+  it('opens reauthentication when a native kubelogin context loses credentials', async () => {
+    harness.check.mockResolvedValue({
+      ...activeStatus,
+      loginMode: 'devicecode',
+      account: null,
+      accounts: [],
+      expiresAtEpochSeconds: null,
+    });
+    render(
+      <AuthSessionProvider configPath="/home/user/.kube/config" selectedContext="aks-orders-prod">
+        <Consumer />
+      </AuthSessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('active'));
+
     fireEvent.click(screen.getByRole('button', { name: 'auth failure' }));
 
     expect(screen.getByTestId('state')).toHaveTextContent('expired');
@@ -172,5 +195,54 @@ describe('AuthSessionProvider', () => {
 
     await waitFor(() => expect(recovery).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId('reauth')).toHaveTextContent('false');
+  });
+
+  it('keeps progress emitted before the start command resolves', async () => {
+    harness.startLogin.mockImplementation(async () => {
+      harness.progressHandler?.({
+        loginId: 'login-fast',
+        phase: 'deviceCode',
+        verificationUrl: 'https://microsoft.com/devicelogin',
+        userCode: 'FAST-CODE',
+        safeMessage: 'Enter the code.',
+        status: null,
+      });
+      return { loginId: 'login-fast', reused: false };
+    });
+    render(
+      <AuthSessionProvider configPath="/home/user/.kube/config" selectedContext="aks-orders-prod">
+        <Consumer />
+      </AuthSessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('active'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'device code' }));
+
+    await waitFor(() => expect(harness.startLogin).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('progress-code')).toHaveTextContent('FAST-CODE'));
+  });
+
+  it('cancels the active method before switching login methods', async () => {
+    harness.startLogin
+      .mockResolvedValueOnce({ loginId: 'browser-login', reused: false })
+      .mockResolvedValueOnce({ loginId: 'device-login', reused: false });
+    render(
+      <AuthSessionProvider configPath="/home/user/.kube/config" selectedContext="aks-orders-prod">
+        <Consumer />
+      </AuthSessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('active'));
+    fireEvent.click(screen.getByRole('button', { name: 'browser' }));
+    await waitFor(() => expect(harness.startLogin).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: 'device code' }));
+
+    await waitFor(() => expect(harness.cancelLogin).toHaveBeenCalledWith('browser-login'));
+    await waitFor(() => expect(harness.startLogin).toHaveBeenLastCalledWith({
+      configPath: '/home/user/.kube/config',
+      contextName: 'aks-orders-prod',
+      tenantId: 'tenant-prod',
+      method: 'deviceCode',
+    }));
   });
 });
