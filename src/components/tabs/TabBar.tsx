@@ -1,11 +1,11 @@
 // src/components/tabs/TabBar.tsx
 import React from 'react';
-import { Tab } from '../../hooks/useTabs';
+import type { Tab } from '../../workspace/types';
 
 /**
  * Props for the TabBar component
  */
-interface TabBarProps {
+export interface TabBarProps {
   /** List of tabs to display */
   tabs: Tab[];
   /** ID of the currently active tab */
@@ -30,15 +30,25 @@ export function TabBar({
   onAddTab,
 }: TabBarProps) {
   return (
-    <div style={styles.tabBar}>
+    <div style={styles.tabBar} role="tablist" aria-label="Terminal tabs">
       {tabs.map(tab => (
         <div
           key={tab.id}
+          role="tab"
+          aria-label={tab.label}
+          aria-selected={tab.id === activeTabId}
+          tabIndex={tab.id === activeTabId ? 0 : -1}
           style={{
             ...styles.tab,
             ...(tab.id === activeTabId ? styles.activeTab : {}),
           }}
           onClick={() => onTabClick(tab.id)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onTabClick(tab.id);
+            }
+          }}
           title={tab.label}
         >
           <span style={styles.tabLabel}>{tab.label}</span>
@@ -50,6 +60,7 @@ export function TabBar({
                 onTabClose(tab.id);
               }}
               title="Close tab"
+              aria-label={`Close ${tab.label}`}
             >
               ×
             </button>
@@ -60,6 +71,7 @@ export function TabBar({
         style={styles.addButton}
         onClick={onAddTab}
         title="New terminal tab"
+        aria-label="New terminal tab"
       >
         +
       </button>
