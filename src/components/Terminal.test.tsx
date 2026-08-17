@@ -23,6 +23,7 @@ vi.mock('xterm', () => {
     loadAddon = vi.fn();
     getSelection = vi.fn().mockReturnValue('');
     clearSelection = vi.fn();
+    focus = vi.fn();
     buffer = { active: {} };
     element = { clientWidth: 800, clientHeight: 600 };
     cols = 80;
