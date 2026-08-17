@@ -10,6 +10,7 @@ interface HomeScreenProps {
   onConfigChange: (path: string) => void;
   onContextChange: (context: string) => void;
   onGetStarted: () => void;
+  authStatus?: React.ReactNode;
 }
 
 export function HomeScreen({
@@ -21,11 +22,13 @@ export function HomeScreen({
   onConfigChange,
   onContextChange,
   onGetStarted,
+  authStatus,
 }: HomeScreenProps) {
   const activeContextDetails = contexts.find(c => c.name === selectedContext);
 
   return (
     <div style={styles.homeContainer}>
+      {authStatus && <div style={styles.authStatus}>{authStatus}</div>}
       {/* Spinner animation */}
       <style>{`
         @keyframes spin {
@@ -164,6 +167,11 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '16px',
     backgroundColor: '#1e1e1e',
     overflow: 'auto',
+  },
+  authStatus: {
+    position: 'absolute',
+    top: '16px',
+    right: '16px',
   },
   homeHeader: {
     textAlign: 'center',
