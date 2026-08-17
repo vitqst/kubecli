@@ -14,10 +14,26 @@ import { CommandPalette } from './components/CommandPalette';
 import { KubectlPalette } from './components/KubectlPalette';
 import { addRecentCommand } from './commands';
 import { kube as kubeAPI, window as windowAPI } from './api';
-import { AuthSessionProvider } from './contexts/AuthSessionContext';
+import { AuthSessionProvider, useAuthSession } from './contexts/AuthSessionContext';
 import { AuthStatusButton } from './components/auth/AuthStatusButton';
 import { AzureSessionsDialog } from './components/auth/AzureSessionsDialog';
 import { ReauthenticationDialog } from './components/auth/ReauthenticationDialog';
+
+function AuthRecoveryBridge({
+  selectedContext,
+  reloadNamespaces,
+}: {
+  selectedContext: string;
+  reloadNamespaces: (contextName: string) => Promise<void>;
+}) {
+  const { registerRecovery } = useAuthSession();
+
+  useEffect(() => registerRecovery(() => {
+    if (selectedContext) return reloadNamespaces(selectedContext);
+  }), [registerRecovery, reloadNamespaces, selectedContext]);
+
+  return null;
+}
 
 function App() {
   // State
@@ -329,6 +345,7 @@ function App() {
   return (
     <ErrorProvider>
       <AuthSessionProvider configPath={kubeconfigPath} selectedContext={selectedContext}>
+        <AuthRecoveryBridge selectedContext={selectedContext} reloadNamespaces={loadNamespaces} />
         <ResourceCacheProvider selectedContext={selectedContext} kubeconfigPath={kubeconfigPath}>
         <ErrorBanner />
         <div style={styles.container}>

@@ -67,6 +67,8 @@ export function AuthSessionProvider({
   const [loginProgress, setLoginProgress] = useState<AzureAuthProgress | null>(null);
   const [isReauthOpen, setIsReauthOpen] = useState(false);
   const [isSessionsOpen, setIsSessionsOpen] = useState(false);
+  const statusRef = useRef(status);
+  statusRef.current = status;
   const activeLoginIdRef = useRef<string | null>(null);
   const checkingRef = useRef<Promise<AzureSessionStatus | null> | null>(null);
   const requestSequenceRef = useRef(0);
@@ -81,7 +83,7 @@ export function AuthSessionProvider({
     if (checkingRef.current) return checkingRef.current;
 
     const requestSequence = ++requestSequenceRef.current;
-    setStatus((current) => ({ ...current, state: 'checking', contextName: selectedContext }));
+    setStatus({ ...emptyStatus(selectedContext), state: 'checking' });
     const request = auth.check(configPath, selectedContext)
       .then((result) => {
         if (requestSequence !== requestSequenceRef.current) return null;
@@ -128,6 +130,8 @@ export function AuthSessionProvider({
     checkingRef.current = null;
     requestSequenceRef.current += 1;
     setLoginProgress(null);
+    setIsReauthOpen(false);
+    setIsSessionsOpen(false);
     activeLoginIdRef.current = null;
     void checkNow();
   }, [checkNow]);
@@ -225,12 +229,13 @@ export function AuthSessionProvider({
   }, []);
 
   const reportAuthFailure = useCallback((message: string) => {
-    setStatus((current) => current.state === 'notAzure' ? current : {
+    if (statusRef.current.loginMode !== 'azurecli') return;
+    setStatus((current) => ({
       ...current,
       state: 'expired',
       reason: 'kubectlAuthFailure',
       safeMessage: message,
-    });
+    }));
     setIsReauthOpen(true);
   }, []);
 

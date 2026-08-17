@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { ResourceType, getResourceDefinition } from '../resources';
 import { useError } from './ErrorContext';
 import { kube } from '../api';
+import { useAuthSession } from './AuthSessionContext';
+import { isAzureAuthError } from '../common/authErrors';
 
 export interface CachedResource {
   type: ResourceType;
@@ -95,6 +97,7 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
   );
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { reportAuthFailure, registerRecovery } = useAuthSession();
 
   const isLoading = useMemo(
     () => Object.values(loadingStates).some(s => s.status === 'loading'),
@@ -274,8 +277,8 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     const categorizeError = (errorMsg: string): { details: string; severity: 'error' | 'warning'; category: string } => {
       const lowerErr = errorMsg.toLowerCase();
 
-      if (lowerErr.includes('auth') || lowerErr.includes('token') || lowerErr.includes('certificate') || lowerErr.includes('unauthorized') || lowerErr.includes('401')) {
-        return { details: 'Authentication failed. Your credentials may have expired. Try switching contexts or running "kubectl config use-context" to refresh.', severity: 'error', category: 'auth' };
+      if (isAzureAuthError(errorMsg)) {
+        return { details: 'Your Azure session has expired. Reconnect to continue loading Kubernetes resources.', severity: 'error', category: 'auth' };
       } else if (lowerErr.includes('forbidden') || lowerErr.includes('403') || lowerErr.includes('permission')) {
         return { details: 'Insufficient permissions. Check your RBAC roles for this cluster.', severity: 'warning', category: 'permission' };
       } else if (lowerErr.includes('connection') || lowerErr.includes('timeout') || lowerErr.includes('refused') || lowerErr.includes('no such host') || lowerErr.includes('network')) {
@@ -303,10 +306,9 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
     // After all fetches complete, consolidate errors and show user-friendly banners.
     // We read loadingStates via a state updater to get the latest values.
     setLoadingStates(currentStates => {
-      if (addError) {
-        const failedTypes = resourceTypes.filter(t => currentStates[t]?.status === 'error');
+      const failedTypes = resourceTypes.filter(t => currentStates[t]?.status === 'error');
 
-        if (failedTypes.length > 0) {
+      if (failedTypes.length > 0) {
           // Group failed types by error category
           const byCategory = new Map<string, { types: ResourceType[]; info: ReturnType<typeof categorizeError> }>();
           for (const t of failedTypes) {
@@ -322,6 +324,11 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
 
           // Show one banner per error category (not per resource type)
           for (const [, { types, info }] of byCategory) {
+            if (info.category === 'auth') {
+              reportAuthFailure(info.details);
+              continue;
+            }
+            if (!addError) continue;
             if (types.length === resourceTypes.length) {
               // All types failed with same cause → single consolidated banner
               addError({
@@ -348,12 +355,11 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
               });
             }
           }
-        }
       }
 
       return currentStates; // Don't mutate, just read
     });
-  }, [selectedContext, cacheKey, addError]);
+  }, [selectedContext, cacheKey, addError, reportAuthFailure]);
 
   // Load from cache or fetch on mount and when context/config changes
   useEffect(() => {
@@ -597,14 +603,14 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
           [type]: { status: 'error', error: errorMsg, duration: errDuration }
         }));
 
-        if (addError) {
+        if (isAzureAuthError(errorMsg)) {
+          reportAuthFailure('Your Azure session has expired. Reconnect to continue loading Kubernetes resources.');
+        } else if (addError) {
           const lowerErr = errorMsg.toLowerCase();
           let details: string;
           let severity: 'error' | 'warning' = 'error';
 
-          if (lowerErr.includes('auth') || lowerErr.includes('token') || lowerErr.includes('certificate') || lowerErr.includes('unauthorized') || lowerErr.includes('401')) {
-            details = 'Authentication failed. Your credentials may have expired. Try switching contexts or running "kubectl config use-context" to refresh.';
-          } else if (lowerErr.includes('forbidden') || lowerErr.includes('403') || lowerErr.includes('permission')) {
+          if (lowerErr.includes('forbidden') || lowerErr.includes('403') || lowerErr.includes('permission')) {
             details = `You don't have permission to list ${type}s in this cluster. Check your RBAC roles.`;
             severity = 'warning';
           } else if (lowerErr.includes('connection') || lowerErr.includes('timeout') || lowerErr.includes('refused') || lowerErr.includes('no such host') || lowerErr.includes('network')) {
@@ -633,7 +639,9 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         [type]: { status: 'error', error: errorMsg, duration }
       }));
 
-      if (addError) {
+      if (isAzureAuthError(errorMsg)) {
+        reportAuthFailure('Your Azure session has expired. Reconnect to continue loading Kubernetes resources.');
+      } else if (addError) {
         addError({
           message: `Failed to load ${type}s`,
           details: errorMsg,
@@ -646,7 +654,9 @@ export function ResourceCacheProvider({ children, selectedContext, kubeconfigPat
         });
       }
     }
-  }, [selectedContext, cacheKey, addError]);
+  }, [selectedContext, cacheKey, addError, reportAuthFailure]);
+
+  useEffect(() => registerRecovery(() => fetchResources()), [fetchResources, registerRecovery]);
 
   const value: ResourceCacheContextType = {
     resources,

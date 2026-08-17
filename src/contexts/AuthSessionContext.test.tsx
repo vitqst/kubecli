@@ -91,6 +91,47 @@ describe('AuthSessionProvider', () => {
     expect(screen.getByTestId('reauth')).toHaveTextContent('true');
   });
 
+  it('does not show Azure recovery for a non-Azure context', async () => {
+    harness.check.mockResolvedValue({
+      ...activeStatus,
+      state: 'notAzure',
+      tenantId: null,
+      loginMode: null,
+    });
+    render(
+      <AuthSessionProvider configPath="/home/user/.kube/config" selectedContext="local-docker">
+        <Consumer />
+      </AuthSessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('notAzure'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'auth failure' }));
+
+    expect(screen.getByTestId('reauth')).toHaveTextContent('false');
+  });
+
+  it('clears stale Azure identity while a newly selected context is being checked', async () => {
+    harness.check
+      .mockResolvedValueOnce(activeStatus)
+      .mockImplementationOnce(() => new Promise(() => {}));
+    const view = render(
+      <AuthSessionProvider configPath="/home/user/.kube/config" selectedContext="aks-orders-prod">
+        <Consumer />
+      </AuthSessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('active'));
+
+    view.rerender(
+      <AuthSessionProvider configPath="/home/user/.kube/config" selectedContext="local-docker">
+        <Consumer />
+      </AuthSessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('checking'));
+    fireEvent.click(screen.getByRole('button', { name: 'auth failure' }));
+
+    expect(screen.getByTestId('reauth')).toHaveTextContent('false');
+  });
+
   it('starts browser login for the current tenant', async () => {
     render(
       <AuthSessionProvider configPath="/home/user/.kube/config" selectedContext="aks-orders-prod">
