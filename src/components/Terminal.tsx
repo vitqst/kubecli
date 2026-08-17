@@ -5,6 +5,8 @@ import { Unicode11Addon } from '@xterm/addon-unicode11';
 import 'xterm/css/xterm.css';
 import { terminal as terminalApi } from '../api';
 
+const shellQuote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
+
 interface TerminalProps {
   id: string;
   cwd?: string;
@@ -24,7 +26,9 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
   const [isReady, setIsReady] = useState(false);
   const isMountedRef = useRef(true);
   const terminalIdRef = useRef<string | null>(null);
-  const prevEnvRef = useRef<Record<string, string> | undefined>(env);
+  const appliedEnvRef = useRef<Record<string, string> | undefined>(env);
+  const desiredEnvRef = useRef<Record<string, string> | undefined>(env);
+  const envUpdateChainRef = useRef<Promise<void>>(Promise.resolve());
 
   // Handle environment changes without recreating terminal
   // Skip the initial run since env was already set during terminal creation
@@ -32,12 +36,15 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
     if (!xtermRef.current || !env || !isReady || !terminalIdRef.current) return;
 
     // Skip if this is the first run (env hasn't actually changed from creation)
-    const prevEnv = prevEnvRef.current;
-    const envChanged = !prevEnv ||
-      prevEnv.KUBECONFIG !== env.KUBECONFIG ||
-      prevEnv.KUBECTL_NAMESPACE !== env.KUBECTL_NAMESPACE;
+    const previousDesiredEnv = desiredEnvRef.current;
+    const envKeys = Array.from(new Set([
+      ...Object.keys(previousDesiredEnv ?? {}),
+      ...Object.keys(env),
+    ]));
+    const envChanged = !previousDesiredEnv
+      || envKeys.some((key) => previousDesiredEnv[key] !== env[key]);
 
-    prevEnvRef.current = env;
+    desiredEnvRef.current = env;
 
     if (!envChanged) {
       console.log(`[Terminal ${id}] Environment unchanged, skipping update`);
@@ -48,49 +55,45 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
 
     // Wait for loading overlay to appear and be fully visible
     // This prevents any flickering by doing all updates while overlay is shown
-    setTimeout(() => {
+    const updateTimer = setTimeout(() => {
       if (!xtermRef.current || !isMountedRef.current || !terminalIdRef.current) return;
 
-      // Batch all terminal writes together to minimize redraws
-      const commands: string[] = [];
-      const messages: string[] = [];
+      const targetEnv = { ...env };
+      envUpdateChainRef.current = envUpdateChainRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (!xtermRef.current || !isMountedRef.current || !terminalIdRef.current) return;
 
-      // Update KUBECONFIG when config changes
-      if (env.KUBECONFIG) {
-        commands.push(`export KUBECONFIG=${env.KUBECONFIG}`);
-        // messages.push(`\x1b[36m✓ KUBECONFIG: ${env.KUBECONFIG}\x1b[0m`);
-      }
+          const appliedEnv = appliedEnvRef.current;
+          const appliedKeys = Array.from(new Set([
+            ...Object.keys(appliedEnv ?? {}),
+            ...Object.keys(targetEnv),
+          ]));
+          const commands: string[] = [];
+          for (const key of appliedKeys) {
+            if (appliedEnv?.[key] === targetEnv[key]) continue;
+            if (targetEnv[key]) {
+              commands.push(`export ${key}=${shellQuote(targetEnv[key])}`);
+            } else if (appliedEnv?.[key]) {
+              commands.push(`unset ${key}`);
+            }
+          }
+          if (commands.length === 0) {
+            appliedEnvRef.current = targetEnv;
+            return;
+          }
 
-      // Export namespace as environment variable (no alias needed - helpers handle it)
-      if (env.KUBECTL_NAMESPACE) {
-        const namespace = env.KUBECTL_NAMESPACE;
-        commands.push(`export KUBECTL_NAMESPACE=${namespace}`);
-
-        // messages.push(`\x1b[32m✓ Namespace: ${namespace}\x1b[0m`);
-      }
-
-      // Clear and write everything in one operation to prevent double blink
-      xtermRef.current.clear();
-
-      // Write all messages at once
-      messages.forEach(msg => {
-        if (xtermRef.current) {
-          xtermRef.current.writeln(msg);
-        }
-      });
-
-      if (xtermRef.current) {
-        xtermRef.current.writeln('');
-      }
-
-      // Send all commands silently (not shown to user)
-      if (commands.length > 0 && terminalIdRef.current) {
-        const batchCommand = commands.join('; ');
-        terminalApi.writeSilent(terminalIdRef.current, batchCommand).catch((err) => {
+          xtermRef.current.clear();
+          xtermRef.current.writeln('');
+          await terminalApi.writeSilent(terminalIdRef.current, commands.join('; '));
+          appliedEnvRef.current = targetEnv;
+        })
+        .catch((err) => {
           console.error('Failed to update environment:', err);
         });
-      }
     }, 500); // Wait 500ms for overlay to be fully visible before any terminal updates
+
+    return () => clearTimeout(updateTimer);
   }, [env, id, isReady]);
 
   // Handle pending command execution

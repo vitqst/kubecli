@@ -15,6 +15,7 @@ pub fn run() {
             set_namespace,
             run_kubectl,
             check_azure_auth,
+            get_kubelogin_runtime_env,
             start_azure_login,
             cancel_azure_login,
             terminal_create,

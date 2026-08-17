@@ -12,6 +12,13 @@ export const auth = {
     return invoke<AzureSessionStatus>('check_azure_auth', { configPath, contextName });
   },
 
+  runtimeEnv(configPath: string, contextName: string): Promise<Record<string, string>> {
+    return invoke<Record<string, string>>('get_kubelogin_runtime_env', {
+      configPath,
+      contextName,
+    });
+  },
+
   startLogin(input: StartAzureLoginInput): Promise<AzureLoginStart> {
     return invoke<AzureLoginStart>('start_azure_login', {
       configPath: input.configPath,

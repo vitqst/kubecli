@@ -230,6 +230,97 @@ describe('Terminal Component', () => {
     });
   });
 
+  describe('Environment Updates', () => {
+    it('updates and clears kubelogin variables without recreating the terminal', async () => {
+      const initialEnv = {
+        KUBECONFIG: '/tmp/old-config',
+        KUBECTL_NAMESPACE: 'default',
+        AAD_LOGIN_METHOD: 'devicecode',
+        AZURE_TENANT_ID: 'tenant-old',
+        AZURE_CLIENT_ID: 'client-old',
+      };
+      const { rerender } = render(<Terminal id="test" env={initialEnv} />);
+
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith('terminal_create', {
+          shell: null,
+          initialEnv,
+        });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      });
+
+      rerender(
+        <Terminal
+          id="test"
+          env={{
+            KUBECONFIG: "/tmp/team's config",
+            KUBECTL_NAMESPACE: 'default',
+            AAD_LOGIN_METHOD: 'devicecode',
+            AZURE_TENANT_ID: 'tenant-new',
+          }}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith('terminal_write_silent', {
+          terminalId: 'term_test_1',
+          data: "export KUBECONFIG='/tmp/team'\"'\"'s config'; export AZURE_TENANT_ID='tenant-new'; unset AZURE_CLIENT_ID",
+        });
+      }, { timeout: 1500 });
+      expect(
+        mockInvoke.mock.calls.filter(([command]) => command === 'terminal_create'),
+      ).toHaveLength(1);
+    });
+
+    it('diffs rapid updates from the environment actually applied to the shell', async () => {
+      const initialEnv = {
+        KUBECONFIG: '/tmp/config',
+        KUBECTL_NAMESPACE: 'default',
+        AAD_LOGIN_METHOD: 'devicecode',
+        AZURE_TENANT_ID: 'tenant-old',
+        AZURE_CLIENT_ID: 'client-old',
+      };
+      const { rerender } = render(<Terminal id="test" env={initialEnv} />);
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith('terminal_create', {
+          shell: null,
+          initialEnv,
+        });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      });
+
+      rerender(
+        <Terminal
+          id="test"
+          env={{ KUBECONFIG: '/tmp/config', KUBECTL_NAMESPACE: 'default' }}
+        />,
+      );
+      await act(async () => Promise.resolve());
+      rerender(
+        <Terminal
+          id="test"
+          env={{
+            KUBECONFIG: '/tmp/config',
+            KUBECTL_NAMESPACE: 'default',
+            AAD_LOGIN_METHOD: 'devicecode',
+            AZURE_TENANT_ID: 'tenant-new',
+          }}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith('terminal_write_silent', {
+          terminalId: 'term_test_1',
+          data: "export AZURE_TENANT_ID='tenant-new'; unset AZURE_CLIENT_ID",
+        });
+      }, { timeout: 1500 });
+    });
+  });
+
   describe('Cleanup', () => {
     it('should unregister listeners on unmount', async () => {
       const { unmount } = render(<Terminal id="test" />);

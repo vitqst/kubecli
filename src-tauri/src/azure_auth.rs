@@ -579,6 +579,10 @@ fn effective_login_mode(exec: &AuthExec) -> String {
     command_env_value(exec, "AAD_LOGIN_METHOD").unwrap_or(configured)
 }
 
+fn is_shared_user_login_mode(login_mode: &str) -> bool {
+    matches!(login_mode, "azurecli" | "devicecode" | "interactive")
+}
+
 fn default_authority_host(environment: &str) -> &'static str {
     match environment.to_ascii_lowercase().as_str() {
         "azurechinacloud" => "https://login.chinacloudapi.cn",
@@ -623,7 +627,13 @@ fn native_kubelogin_scope(exec: &AuthExec) -> Option<NativeKubeloginScope> {
     }
     let environment_override = !argument_flag_enabled(&exec.args, "--disable-environment-override");
     let login_mode = effective_login_mode(exec);
-    if login_mode != "devicecode" && login_mode != "interactive" {
+    if !is_shared_user_login_mode(&login_mode) {
+        return None;
+    }
+    // An azurecli kubeconfig can only be redirected to the shared device-code
+    // cache through kubelogin's environment override. If the kubeconfig
+    // explicitly disables that mechanism, leave it on its configured backend.
+    if login_mode != "devicecode" && !environment_override {
         return None;
     }
     let environment = argument_value(&exec.args, &["--environment", "-e"])
@@ -689,6 +699,49 @@ fn native_kubelogin_cache_path(kubeconfig_yaml: &str, context_name: &str) -> Opt
     native_kubelogin_scope(exec).map(|scope| scope.cache_path)
 }
 
+pub(crate) fn kubelogin_runtime_env(
+    kubeconfig_yaml: &str,
+    context_name: &str,
+) -> Option<Vec<(String, String)>> {
+    let config: AuthKubeConfig = serde_yaml::from_str(kubeconfig_yaml).ok()?;
+    let scope = selected_auth_exec(&config, context_name).and_then(native_kubelogin_scope)?;
+    let cached_identity = std::fs::read_to_string(&scope.cache_path)
+        .ok()
+        .and_then(|contents| serde_json::from_str::<SharedKubeloginIdentity>(&contents).ok());
+    Some(kubelogin_runtime_env_for_scope(
+        scope,
+        cached_identity.as_ref(),
+    ))
+}
+
+fn kubelogin_runtime_env_for_scope(
+    scope: NativeKubeloginScope,
+    cached_identity: Option<&SharedKubeloginIdentity>,
+) -> Vec<(String, String)> {
+    let mut env = vec![("AAD_LOGIN_METHOD".to_string(), "devicecode".to_string())];
+    let tenant_id = if scope.tenant_id.is_empty() {
+        cached_identity
+            .map(|identity| identity.tenant_id.clone())
+            .unwrap_or_default()
+    } else {
+        scope.tenant_id
+    };
+    let client_id = if scope.client_id.is_empty() {
+        cached_identity
+            .map(|identity| identity.client_id.clone())
+            .unwrap_or_default()
+    } else {
+        scope.client_id
+    };
+    if !tenant_id.is_empty() {
+        env.push(("AZURE_TENANT_ID".to_string(), tenant_id));
+    }
+    if !client_id.is_empty() {
+        env.push(("AZURE_CLIENT_ID".to_string(), client_id));
+    }
+    env
+}
+
 fn check_native_kubelogin_cache(
     kubeconfig_yaml: &str,
     context_name: &str,
@@ -698,7 +751,7 @@ fn check_native_kubelogin_cache(
     let selected = contexts
         .iter()
         .find(|context| context.context_name == context_name)?;
-    if selected.login_mode != "devicecode" && selected.login_mode != "interactive" {
+    if !is_shared_user_login_mode(&selected.login_mode) {
         return None;
     }
 
@@ -730,8 +783,11 @@ fn check_native_kubelogin_cache(
             return Some(NativeKubeloginCacheCheck::Unavailable(status));
         }
     };
+    if status.tenant_id.is_none() && !identity.tenant_id.is_empty() {
+        status.tenant_id = Some(identity.tenant_id.clone());
+    }
     let tenant_matches =
-        !scope.tenant_id.is_empty() && scope.tenant_id.eq_ignore_ascii_case(&identity.tenant_id);
+        scope.tenant_id.is_empty() || scope.tenant_id.eq_ignore_ascii_case(&identity.tenant_id);
     let client_matches =
         scope.client_id.is_empty() || scope.client_id.eq_ignore_ascii_case(&identity.client_id);
     let cached_authority = identity
@@ -775,17 +831,14 @@ fn verify_native_kubelogin_context_with_runner<R: AzureCommandRunner>(
     else {
         return base_status(context_name, AzureAuthState::NotAzure);
     };
-    let effective_tenant = serde_yaml::from_str::<AuthKubeConfig>(kubeconfig_yaml)
-        .ok()
-        .and_then(|config| {
-            selected_auth_exec(&config, context_name)
-                .and_then(native_kubelogin_scope)
-                .map(|scope| scope.tenant_id)
-        })
-        .filter(|tenant| !tenant.is_empty())
+    let runtime_env = kubelogin_runtime_env(kubeconfig_yaml, context_name).unwrap_or_default();
+    let effective_tenant = runtime_env
+        .iter()
+        .find(|(name, _)| name == "AZURE_TENANT_ID")
+        .map(|(_, value)| value.clone())
         .or_else(|| selected.tenant_id.clone());
     let affected_contexts = compatible_native_contexts(kubeconfig_yaml, context_name);
-    let invocation = match build_native_kubelogin_login(
+    let mut invocation = match build_native_kubelogin_login(
         kubeconfig_yaml,
         context_name,
         AzureLoginMethod::DeviceCode,
@@ -801,6 +854,7 @@ fn verify_native_kubelogin_context_with_runner<R: AzureCommandRunner>(
             return status;
         }
     };
+    merge_command_env(&mut invocation.env, &runtime_env);
     if let Err(error) = runner.run_with_env_discarding_stdout(
         &invocation.program,
         &invocation.args,
@@ -840,7 +894,7 @@ fn verify_native_kubelogin_context_with_runner<R: AzureCommandRunner>(
         "get".to_string(),
         "--raw=/version".to_string(),
     ];
-    let result = runner.run("kubectl", &args, Duration::from_secs(15));
+    let result = runner.run_with_env("kubectl", &args, Duration::from_secs(15), &runtime_env);
     let mut status = base_status(
         context_name,
         if result.is_ok() {
@@ -1576,6 +1630,13 @@ fn set_login_argument(args: &mut Vec<String>, login_mode: &str) {
     *args = normalized;
 }
 
+fn merge_command_env(env: &mut Vec<(String, String)>, overrides: &[(String, String)]) {
+    for (name, value) in overrides {
+        env.retain(|(existing, _)| existing != name);
+        env.push((name.clone(), value.clone()));
+    }
+}
+
 fn build_native_kubelogin_login(
     kubeconfig_yaml: &str,
     context_name: &str,
@@ -1602,10 +1663,18 @@ fn build_native_kubelogin_login(
         return Err("The selected kubelogin exec command is not a get-token command.".to_string());
     }
     let current_mode = effective_login_mode(exec);
-    if current_mode != "devicecode" && current_mode != "interactive" {
+    if !is_shared_user_login_mode(&current_mode) {
         return Err(format!(
             "This context uses kubelogin mode '{current_mode}', which is not an interactive user session."
         ));
+    }
+    if current_mode != "devicecode"
+        && argument_flag_enabled(&exec.args, "--disable-environment-override")
+    {
+        return Err(
+            "This context disables kubelogin environment overrides, so it cannot share the device-code cache without changing the kubeconfig."
+                .to_string(),
+        );
     }
 
     let mut args = exec.args.clone();
@@ -1811,8 +1880,15 @@ pub fn start_azure_login(
         .tenant_id
         .clone()
         .unwrap_or_else(|| tenant_id.clone());
+    let shared_native = serde_yaml::from_str::<AuthKubeConfig>(&kubeconfig_yaml)
+        .ok()
+        .and_then(|config| {
+            selected_auth_exec(&config, &context_name).and_then(native_kubelogin_scope)
+        })
+        .is_some();
     let (program, args, env, login_backend, reservation_scope) = if selected.login_mode
         == "azurecli"
+        && !shared_native
     {
         if selected
             .tenant_id
@@ -1831,21 +1907,21 @@ pub fn start_azure_login(
             format!("azurecli:{}", effective_tenant.to_ascii_lowercase()),
         )
     } else {
-        let invocation = match build_native_kubelogin_login(&kubeconfig_yaml, &context_name, method)
-        {
-            Ok(invocation) => invocation,
-            Err(error) => {
-                log_auth_diagnostic(
-                    "login.backend_failed",
-                    &[
-                        ("login_id", login_id),
-                        ("context", context_name),
-                        ("detail", error.clone()),
-                    ],
-                );
-                return Err(error);
-            }
-        };
+        let mut invocation =
+            match build_native_kubelogin_login(&kubeconfig_yaml, &context_name, method) {
+                Ok(invocation) => invocation,
+                Err(error) => {
+                    log_auth_diagnostic(
+                        "login.backend_failed",
+                        &[
+                            ("login_id", login_id),
+                            ("context", context_name),
+                            ("detail", error.clone()),
+                        ],
+                    );
+                    return Err(error);
+                }
+            };
         let config: AuthKubeConfig = serde_yaml::from_str(&kubeconfig_yaml)
             .map_err(|_| "KubeCLI could not read Azure authentication settings.".to_string())?;
         let scope = selected_auth_exec(&config, &context_name)
@@ -1859,6 +1935,25 @@ pub fn start_azure_login(
                 "The selected context's Azure tenant changed. Refresh and try again.".to_string(),
             );
         }
+        let mut runtime_env =
+            kubelogin_runtime_env(&kubeconfig_yaml, &context_name).unwrap_or_default();
+        if !runtime_env
+            .iter()
+            .any(|(name, _)| name == "AZURE_TENANT_ID")
+        {
+            runtime_env.push(("AZURE_TENANT_ID".to_string(), tenant_id.clone()));
+        }
+        let requested_mode = match method {
+            AzureLoginMethod::Browser => "interactive",
+            AzureLoginMethod::DeviceCode => "devicecode",
+        };
+        if let Some((_, value)) = runtime_env
+            .iter_mut()
+            .find(|(name, _)| name == "AAD_LOGIN_METHOD")
+        {
+            *value = requested_mode.to_string();
+        }
+        merge_command_env(&mut invocation.env, &runtime_env);
         let reservation_scope = format!(
             "kubelogin:{}:{}:{}:{}:{}",
             scope.tenant_id,
@@ -2152,11 +2247,12 @@ mod tests {
     use super::{
         append_auth_diagnostic_to, build_login_args, build_native_kubelogin_login,
         check_azure_auth_with_runner, check_native_kubelogin_cache, diagnostic_value,
-        discover_azure_contexts, native_kubelogin_cache_path, parse_device_instruction,
-        resolve_context_tenant_with_runner, verify_azure_auth_after_login_with,
-        verify_native_kubelogin_context_with_runner, AzureAuthState, AzureCommandError,
-        AzureCommandOutput, AzureCommandRunner, AzureLoginMethod, LoginReservation,
-        LoginReservations, NativeKubeloginCacheCheck, SystemAzureCommandRunner,
+        discover_azure_contexts, kubelogin_runtime_env, kubelogin_runtime_env_for_scope,
+        native_kubelogin_cache_path, parse_device_instruction, resolve_context_tenant_with_runner,
+        verify_azure_auth_after_login_with, verify_native_kubelogin_context_with_runner,
+        AzureAuthState, AzureCommandError, AzureCommandOutput, AzureCommandRunner,
+        AzureLoginMethod, LoginReservation, LoginReservations, NativeKubeloginCacheCheck,
+        NativeKubeloginScope, SharedKubeloginIdentity, SystemAzureCommandRunner,
     };
     use std::cell::RefCell;
     use std::collections::VecDeque;
@@ -2175,7 +2271,7 @@ users:
     user:
       exec:
         command: kubelogin
-        args: [get-token, --login, azurecli, --tenant-id, tenant-prod]
+        args: [get-token, --login, azurecli, --tenant-id, tenant-prod, --client-id, client-aks]
 "#;
 
     struct FakeRunner {
@@ -2478,6 +2574,74 @@ users:
     }
 
     #[test]
+    fn overrides_azurecli_kubeconfig_to_shared_devicecode_in_memory() {
+        let invocation = build_native_kubelogin_login(
+            AZURE_CLI_KUBECONFIG,
+            "aks-orders-prod",
+            AzureLoginMethod::DeviceCode,
+        )
+        .expect("azurecli context is compatible with native kubelogin");
+
+        assert!(invocation
+            .args
+            .windows(2)
+            .any(|pair| pair == ["--login", "devicecode"]));
+        assert_eq!(
+            kubelogin_runtime_env(AZURE_CLI_KUBECONFIG, "aks-orders-prod"),
+            Some(vec![
+                ("AAD_LOGIN_METHOD".to_string(), "devicecode".to_string()),
+                ("AZURE_TENANT_ID".to_string(), "tenant-prod".to_string()),
+                ("AZURE_CLIENT_ID".to_string(), "client-aks".to_string()),
+            ])
+        );
+    }
+
+    #[test]
+    fn recovers_missing_kubeconfig_identity_from_shared_cache() {
+        let env = kubelogin_runtime_env_for_scope(
+            NativeKubeloginScope {
+                tenant_id: String::new(),
+                client_id: String::new(),
+                cache_path: "/home/user/.kube/cache/kubelogin/auth.json".into(),
+                environment: "azurepubliccloud".to_string(),
+                authority_host: "https://login.microsoftonline.com".to_string(),
+            },
+            Some(&SharedKubeloginIdentity {
+                authority: "https://login.microsoftonline.com/tenant-prod".to_string(),
+                client_id: "client-aks".to_string(),
+                tenant_id: "tenant-prod".to_string(),
+            }),
+        );
+
+        assert_eq!(
+            env,
+            vec![
+                ("AAD_LOGIN_METHOD".to_string(), "devicecode".to_string()),
+                ("AZURE_TENANT_ID".to_string(), "tenant-prod".to_string()),
+                ("AZURE_CLIENT_ID".to_string(), "client-aks".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn does_not_override_non_devicecode_mode_when_environment_override_is_disabled() {
+        for login_mode in ["azurecli", "interactive"] {
+            let kubeconfig = AZURE_CLI_KUBECONFIG.replace(
+                "--login, azurecli",
+                &format!("--login, {login_mode}, --disable-environment-override"),
+            );
+
+            assert_eq!(kubelogin_runtime_env(&kubeconfig, "aks-orders-prod"), None);
+            assert!(build_native_kubelogin_login(
+                &kubeconfig,
+                "aks-orders-prod",
+                AzureLoginMethod::DeviceCode,
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
     fn rejects_non_token_kubelogin_exec_commands() {
         let kubeconfig = r#"
 apiVersion: v1
@@ -2743,6 +2907,8 @@ users:
                 "get-token",
                 "--tenant-id",
                 "tenant-prod",
+                "--client-id",
+                "client-aks",
                 "--login",
                 "devicecode",
             ]

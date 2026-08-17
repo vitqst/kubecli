@@ -290,8 +290,20 @@ fn run_kubectl_once(
             .position(|argument| argument == "--context")
             .and_then(|index| args.get(index + 1))
         {
-            if let Some(tenant_id) = azure_auth::resolve_context_tenant(path, context_name) {
-                cmd.env("AZURE_TENANT_ID", tenant_id);
+            let runtime_env = fs::read_to_string(path)
+                .ok()
+                .and_then(|yaml| azure_auth::kubelogin_runtime_env(&yaml, context_name))
+                .unwrap_or_default();
+            let has_runtime_tenant = runtime_env
+                .iter()
+                .any(|(name, value)| name == "AZURE_TENANT_ID" && !value.is_empty());
+            for (name, value) in runtime_env {
+                cmd.env(name, value);
+            }
+            if !has_runtime_tenant {
+                if let Some(tenant_id) = azure_auth::resolve_context_tenant(path, context_name) {
+                    cmd.env("AZURE_TENANT_ID", tenant_id);
+                }
             }
         }
     }

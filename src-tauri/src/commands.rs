@@ -49,6 +49,25 @@ pub async fn check_azure_auth(
 }
 
 #[tauri::command]
+pub async fn get_kubelogin_runtime_env(
+    config_path: String,
+    context_name: String,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let kubeconfig_yaml = std::fs::read_to_string(&config_path)
+            .map_err(|error| format!("Failed to read kubeconfig: {error}"))?;
+        Ok(
+            azure_auth::kubelogin_runtime_env(&kubeconfig_yaml, &context_name)
+                .unwrap_or_default()
+                .into_iter()
+                .collect(),
+        )
+    })
+    .await
+    .map_err(|error| format!("Task failed: {error}"))?
+}
+
+#[tauri::command]
 pub fn start_azure_login(
     app: AppHandle,
     config_path: String,

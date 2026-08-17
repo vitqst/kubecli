@@ -8,7 +8,8 @@ import { ResourceType } from '../../resources';
 import { useTabs } from '../../hooks/useTabs';
 import type { PanelState } from '../../hooks/useTabs';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
-import { window as windowAPI } from '../../api';
+import { useAuthSession } from '../../contexts/AuthSessionContext';
+import { auth, window as windowAPI } from '../../api';
 
 // Memoized Memory Display Component
 const MemoryDisplay = memo(() => {
@@ -107,6 +108,35 @@ export function TerminalScreen({
   onGoHome,
   authStatus,
 }: TerminalScreenProps) {
+  const { status: azureAuthStatus } = useAuthSession();
+  const runtimeEnvKey = `${kubeconfigPath}\0${selectedContext}`;
+  const authRuntimeRevision = [
+    azureAuthStatus.state,
+    azureAuthStatus.tenantId ?? '',
+    azureAuthStatus.expiresAtEpochSeconds ?? '',
+  ].join('\0');
+  const [runtimeAuthEnv, setRuntimeAuthEnv] = useState<{
+    key: string;
+    env: Record<string, string>;
+  }>({ key: '', env: {} });
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    auth.runtimeEnv(kubeconfigPath, selectedContext)
+      .then((env) => {
+        if (!cancelled) setRuntimeAuthEnv({ key: runtimeEnvKey, env });
+      })
+      .catch((error) => {
+        console.warn('[TerminalScreen] Failed to resolve kubelogin runtime environment:', error);
+        if (!cancelled) setRuntimeAuthEnv({ key: runtimeEnvKey, env: {} });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authRuntimeRevision, kubeconfigPath, selectedContext, runtimeEnvKey]);
+
   // Tab management (includes per-tab panel state)
   const {
     tabs,
@@ -153,8 +183,9 @@ export function TerminalScreen({
   // Memoize env object
   const terminalEnv = useMemo(() => ({
     KUBECONFIG: kubeconfigPath,
-    KUBECTL_NAMESPACE: selectedNamespace
-  }), [kubeconfigPath, selectedNamespace]);
+    KUBECTL_NAMESPACE: selectedNamespace,
+    ...(runtimeAuthEnv.key === runtimeEnvKey ? runtimeAuthEnv.env : {}),
+  }), [kubeconfigPath, selectedNamespace, runtimeAuthEnv, runtimeEnvKey]);
 
   // Callback to update active tab's panel state
   const handlePanelStateChange = useCallback((updates: Partial<PanelState>) => {

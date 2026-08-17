@@ -31,6 +31,23 @@ describe('auth API', () => {
     });
   });
 
+  it('gets the in-memory kubelogin environment for a terminal', async () => {
+    const runtimeEnv = {
+      AAD_LOGIN_METHOD: 'devicecode',
+      AZURE_TENANT_ID: 'tenant-prod',
+      AZURE_CLIENT_ID: 'client-aks',
+    };
+    vi.mocked(invoke).mockResolvedValue(runtimeEnv);
+
+    await expect(
+      auth.runtimeEnv('/home/user/.kube/config', 'aks-orders-prod'),
+    ).resolves.toEqual(runtimeEnv);
+    expect(invoke).toHaveBeenCalledWith('get_kubelogin_runtime_env', {
+      configPath: '/home/user/.kube/config',
+      contextName: 'aks-orders-prod',
+    });
+  });
+
   it('starts the selected browser or device-code login method', async () => {
     vi.mocked(invoke).mockResolvedValue({ loginId: 'login-1', reused: false });
 
