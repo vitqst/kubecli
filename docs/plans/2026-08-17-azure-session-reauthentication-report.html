@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KubeCLI Azure Session &amp; Reauthentication Plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #111315;
+      --panel: #181b1f;
+      --panel-2: #202429;
+      --panel-3: #272c32;
+      --line: #343a41;
+      --line-soft: #292e34;
+      --text: #edf1f3;
+      --muted: #99a2aa;
+      --subtle: #727c85;
+      --teal: #4ec9b0;
+      --teal-soft: rgba(78, 201, 176, .13);
+      --blue: #1683c5;
+      --blue-hover: #2196da;
+      --amber: #e7ad45;
+      --amber-soft: rgba(231, 173, 69, .13);
+      --red: #f27d72;
+      --red-soft: rgba(242, 125, 114, .12);
+      --green: #6fd39b;
+      --green-soft: rgba(111, 211, 155, .12);
+      --radius: 12px;
+      --shadow: 0 22px 55px rgba(0, 0, 0, .32);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 82% 0%, rgba(78, 201, 176, .08), transparent 28rem),
+        var(--page);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    button, input { font: inherit; }
+    a { color: inherit; }
+    code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    code { color: #b9e6dc; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 28px 20px;
+      border-right: 1px solid var(--line-soft);
+      background: rgba(17, 19, 21, .86);
+      backdrop-filter: blur(14px);
+      overflow-y: auto;
+    }
+
+    .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 32px; }
+    .brand-mark {
+      width: 34px; height: 34px; display: grid; place-items: center;
+      color: var(--teal); border: 1px solid rgba(78, 201, 176, .35);
+      border-radius: 9px; background: var(--teal-soft);
+    }
+    .brand strong { display: block; font-size: 14px; letter-spacing: .02em; }
+    .brand span { display: block; color: var(--muted); font-size: 11px; }
+    .nav-label { margin: 22px 10px 8px; color: var(--subtle); font-size: 10px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    .nav { display: grid; gap: 3px; }
+    .nav a {
+      padding: 8px 10px; border-radius: 7px; color: var(--muted);
+      text-decoration: none; font-size: 13px;
+    }
+    .nav a:hover { color: var(--text); background: var(--panel-2); }
+    .decision-chip {
+      margin-top: 28px; padding: 12px; border: 1px solid rgba(78, 201, 176, .25);
+      border-radius: 10px; background: var(--teal-soft); color: #c8f1e8; font-size: 12px;
+    }
+    .decision-chip strong { display: block; margin-bottom: 3px; }
+
+    main { min-width: 0; padding: 58px clamp(28px, 5vw, 76px) 100px; }
+    .content { width: min(1180px, 100%); margin: 0 auto; }
+    .eyebrow { color: var(--teal); font-size: 11px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    h1 { max-width: 900px; margin: 12px 0 18px; font-size: clamp(38px, 6vw, 67px); line-height: 1.02; letter-spacing: -.045em; }
+    .lede { max-width: 800px; margin: 0; color: #b3bbc2; font-size: 18px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 9px; margin: 26px 0 48px; }
+    .pill { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 11px; }
+    .pill.good { color: #c8f1e8; border-color: rgba(78, 201, 176, .3); background: var(--teal-soft); }
+
+    section { scroll-margin-top: 28px; margin-top: 72px; }
+    .section-head { display: grid; grid-template-columns: 160px 1fr; gap: 28px; margin-bottom: 26px; }
+    .section-no { color: var(--teal); font: 700 11px/1.5 "SFMono-Regular", Consolas, monospace; letter-spacing: .12em; }
+    h2 { margin: 0 0 8px; font-size: 29px; letter-spacing: -.025em; }
+    h3 { margin: 0 0 8px; font-size: 17px; }
+    h4 { margin: 22px 0 7px; font-size: 13px; }
+    p { margin: 0 0 14px; }
+    .section-intro { max-width: 760px; color: var(--muted); }
+
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .card { padding: 20px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--panel); }
+    .card p, .card li { color: var(--muted); font-size: 13px; }
+    .metric { margin-top: 12px; color: var(--teal); font-size: 26px; font-weight: 750; letter-spacing: -.03em; }
+    .plain-list { margin: 10px 0 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 7px; }
+    .callout { padding: 16px 18px; border-left: 3px solid var(--amber); border-radius: 5px 10px 10px 5px; background: var(--amber-soft); color: #e8d3aa; font-size: 13px; }
+
+    /* Product mock */
+    .mock-shell { border: 1px solid #3a4148; border-radius: 14px; overflow: hidden; background: #1e1e1e; box-shadow: var(--shadow); }
+    .mock-titlebar { height: 31px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #32363a; background: #e5e5e5; color: #2b2b2b; font-size: 11px; font-weight: 650; }
+    .mock-appbar { height: 55px; display: flex; align-items: center; gap: 14px; padding: 0 16px; border-bottom: 1px solid #3e3e42; background: #252526; }
+    .mock-home { width: 29px; height: 29px; display: grid; place-items: center; color: #c7c7c7; border-radius: 5px; }
+    .mock-path { flex: 1; min-width: 0; color: #858585; font: 11px "SFMono-Regular", Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mock-path b { color: #4ec9b0; font-weight: 500; }
+    .auth-chip { display: flex; align-items: center; gap: 8px; max-width: 280px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: #1e1e1e; color: #d4d4d4; font-size: 11px; cursor: pointer; }
+    .auth-chip:hover { border-color: #555d65; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+    .status-dot.amber { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); }
+    .status-dot.red { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+    .status-dot.spin { background: var(--blue); animation: pulse 1s infinite alternate; }
+    .mock-body { position: relative; display: grid; grid-template-columns: 145px 1fr; height: 515px; overflow: hidden; }
+    .mock-sidebar { padding: 13px 9px; border-right: 1px solid #3e3e42; background: #252526; }
+    .mock-sidebar small { color: #858585; font-size: 8px; font-weight: 800; letter-spacing: .09em; }
+    .mock-select { margin: 8px 0 18px; padding: 7px; border-radius: 4px; background: #f1f1f1; color: #555; font-size: 9px; }
+    .mock-resource { margin: 4px 0; padding: 7px 8px; border-radius: 4px; color: #d6d6d6; font-size: 9px; }
+    .mock-resource.active { background: #0e639c; color: white; }
+    .mock-workspace { background: #1e1e1e; }
+    .mock-tabs { height: 32px; padding: 6px 10px; border-bottom: 1px solid #3e3e42; color: #ccc; font-size: 9px; }
+    .terminal-lines { padding: 18px; color: #d4d4d4; font: 10px/1.7 "SFMono-Regular", Consolas, monospace; }
+    .terminal-lines .prompt { color: #4ec9b0; }
+    .terminal-lines .muted { color: #6d747a; }
+    .terminal-lines .error { color: #f48771; }
+    .mock-table { position: absolute; left: 145px; right: 0; bottom: 0; height: 150px; border-top: 1px solid #3e3e42; background: #252526; }
+    .mock-table-head { padding: 8px 12px; border-bottom: 1px solid #3e3e42; color: #ccc; font-size: 9px; font-weight: 700; }
+    .mock-row { display: grid; grid-template-columns: 1.2fr 2fr .7fr .7fr; padding: 7px 12px; color: #bbb; font-size: 8px; border-bottom: 1px solid rgba(62,62,66,.5); }
+
+    .mock-toast { position: absolute; top: 14px; right: 14px; width: min(390px, calc(100% - 28px)); padding: 13px; border: 1px solid rgba(231,173,69,.48); border-radius: 9px; background: #332a1d; box-shadow: 0 14px 35px rgba(0,0,0,.35); }
+    .mock-toast strong { display: block; font-size: 11px; color: #f2d594; }
+    .mock-toast p { margin: 3px 0 9px; color: #c9b890; font-size: 9px; }
+
+    .modal-shade { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(9, 11, 12, .68); backdrop-filter: blur(2px); }
+    .modal { width: min(520px, 100%); border: 1px solid #4a5057; border-radius: 11px; background: #252526; box-shadow: 0 28px 70px rgba(0,0,0,.55); overflow: hidden; }
+    .modal-header { display: flex; align-items: flex-start; gap: 13px; padding: 20px 20px 13px; }
+    .modal-icon { flex: 0 0 auto; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; background: var(--red-soft); color: var(--red); font-weight: 800; }
+    .modal-icon.blue { background: rgba(22,131,197,.13); color: #65b9e8; }
+    .modal-icon.green { background: var(--green-soft); color: var(--green); }
+    .modal-title { font-size: 16px; font-weight: 700; }
+    .modal-copy { margin-top: 3px; color: #9fa7ad; font-size: 11px; }
+    .context-strip { margin: 2px 20px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .context-item { padding: 10px; border: 1px solid #383d42; border-radius: 7px; background: #1e1e1e; }
+    .context-item span { display: block; color: #777f86; font-size: 8px; text-transform: uppercase; letter-spacing: .08em; }
+    .context-item b { display: block; margin-top: 3px; color: #d7d7d7; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .device-box { margin: 0 20px 16px; padding: 14px; border: 1px solid rgba(78,201,176,.27); border-radius: 8px; background: rgba(78,201,176,.06); text-align: center; }
+    .device-box span { color: #8f9a9f; font-size: 9px; }
+    .device-code { margin: 6px 0; color: #d9fff6; font: 750 24px "SFMono-Regular", Consolas, monospace; letter-spacing: .1em; }
+    .progress { margin: 0 20px 17px; height: 6px; overflow: hidden; border-radius: 99px; background: #393e43; }
+    .progress::after { content: ""; display: block; width: 62%; height: 100%; border-radius: inherit; background: var(--blue); animation: progress 1.2s ease-in-out infinite alternate; }
+    .modal-actions { display: flex; justify-content: space-between; gap: 10px; padding: 13px 20px; border-top: 1px solid #383d42; background: #202021; }
+    .actions-right { display: flex; gap: 8px; }
+    .btn { padding: 8px 12px; border: 1px solid #454b51; border-radius: 5px; background: #2d3033; color: #d7d7d7; font-size: 10px; cursor: pointer; }
+    .btn.primary { border-color: #1683c5; background: #1683c5; color: white; font-weight: 700; }
+    .btn.primary:hover { background: var(--blue-hover); }
+    .session-list { margin: 0 20px 16px; display: grid; gap: 8px; }
+    .session-row { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid #383d42; border-radius: 8px; background: #1e1e1e; }
+    .avatar { width: 29px; height: 29px; display: grid; place-items: center; border-radius: 7px; background: #163b55; color: #8fd2f5; font-size: 10px; font-weight: 800; }
+    .session-row b, .session-row span { display: block; }
+    .session-row b { font-size: 10px; }
+    .session-row span { color: #858d94; font-size: 8px; }
+    .session-state { padding: 4px 6px; border-radius: 99px; color: var(--green); background: var(--green-soft); font-size: 8px; }
+    .session-state.warn { color: var(--amber); background: var(--amber-soft); }
+
+    .mock-controls { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+    .state-btn { padding: 8px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--muted); cursor: pointer; font-size: 11px; }
+    .state-btn.active { border-color: rgba(78,201,176,.45); background: var(--teal-soft); color: #d4f4ed; }
+    .mock-caption { color: var(--muted); font-size: 12px; }
+
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .flow-step { position: relative; min-height: 110px; padding: 15px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--panel); }
+    .flow-step:not(:last-child)::after { content: "→"; position: absolute; z-index: 2; top: 40px; right: -15px; color: var(--teal); font-weight: 800; }
+    .flow-step span { display: block; margin-bottom: 8px; color: var(--teal); font: 700 10px monospace; }
+    .flow-step b { display: block; font-size: 12px; }
+    .flow-step p { margin-top: 5px; color: var(--muted); font-size: 10px; }
+
+    .architecture { display: grid; grid-template-columns: 1fr 58px 1.25fr 58px 1fr; align-items: stretch; }
+    .arch-column { display: grid; gap: 9px; }
+    .arch-box { padding: 15px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+    .arch-box strong { display: block; font-size: 12px; }
+    .arch-box span { color: var(--muted); font-size: 10px; }
+    .arch-core { border-color: rgba(78,201,176,.35); background: var(--teal-soft); }
+    .arch-arrow { display: grid; place-items: center; color: var(--teal); font-size: 22px; }
+
+    .state-table { width: 100%; border-collapse: collapse; border: 1px solid var(--line-soft); background: var(--panel); font-size: 12px; }
+    .state-table th, .state-table td { padding: 12px 13px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+    .state-table th { color: var(--subtle); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+    .state-table td { color: var(--muted); }
+    .state-table td:first-child { color: var(--text); font-family: monospace; }
+
+    details.task { margin-bottom: 10px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--panel); overflow: hidden; }
+    details.task[open] { border-color: #3b434a; }
+    details.task summary { display: flex; gap: 14px; align-items: center; padding: 16px 18px; cursor: pointer; list-style: none; }
+    details.task summary::-webkit-details-marker { display: none; }
+    .task-no { flex: 0 0 auto; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: var(--teal-soft); color: var(--teal); font: 750 11px monospace; }
+    .task-summary b { display: block; font-size: 13px; }
+    .task-summary span { display: block; color: var(--muted); font-size: 10px; }
+    .task-body { padding: 0 18px 20px 60px; color: var(--muted); font-size: 12px; }
+    .file-list { padding: 11px 13px; border-radius: 7px; background: #121416; color: #afbac1; }
+    .steps { margin: 12px 0 0; padding-left: 18px; }
+    .steps li + li { margin-top: 7px; }
+    pre { margin: 12px 0; padding: 15px; overflow: auto; border: 1px solid #30363c; border-radius: 8px; background: #101214; color: #cdd6dc; font-size: 11px; line-height: 1.55; }
+    .command { color: #d9fff6; }
+
+    .checklist { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px 18px; padding: 0; list-style: none; }
+    .checklist li { position: relative; padding: 11px 12px 11px 38px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: 12px; }
+    .checklist li::before { content: "✓"; position: absolute; left: 13px; top: 10px; color: var(--teal); font-weight: 800; }
+    .risk { border-left: 3px solid var(--red); }
+    footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line-soft); color: var(--subtle); font-size: 11px; }
+
+    @keyframes pulse { from { opacity: .45; } to { opacity: 1; } }
+    @keyframes progress { from { transform: translateX(-25%); } to { transform: translateX(60%); } }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line-soft); }
+      .nav { grid-template-columns: repeat(3, 1fr); }
+      .nav-label, .decision-chip { display: none; }
+      main { padding-top: 38px; }
+      .grid-3, .flow { grid-template-columns: 1fr 1fr; }
+      .flow-step::after { display: none; }
+      .architecture { grid-template-columns: 1fr; gap: 8px; }
+      .arch-arrow { transform: rotate(90deg); }
+    }
+    @media (max-width: 620px) {
+      .section-head { grid-template-columns: 1fr; gap: 5px; }
+      .grid-2, .grid-3, .flow, .checklist { grid-template-columns: 1fr; }
+      .mock-body { grid-template-columns: 95px 1fr; }
+      .mock-sidebar { overflow: hidden; }
+      .mock-table { left: 95px; }
+      .mock-path { display: none; }
+      .auth-chip { margin-left: auto; }
+      .context-strip { grid-template-columns: 1fr; }
+      .task-body { padding-left: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">◇</div>
+        <div><strong>KubeCLI</strong><span>Product implementation brief</span></div>
+      </div>
+      <div class="nav-label">Report</div>
+      <nav class="nav" aria-label="Report sections">
+        <a href="#outcome">Outcome</a>
+        <a href="#mock">UX mock</a>
+        <a href="#flow">User flow</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#contract">Contracts</a>
+        <a href="#plan">Delivery plan</a>
+        <a href="#quality">Quality gates</a>
+        <a href="#risks">Risks</a>
+        <a href="#acceptance">Acceptance</a>
+      </nav>
+      <div class="decision-chip">
+        <strong>Approved direction</strong>
+        Azure CLI session broker, browser-first reauthentication, device-code fallback, multi-account and multi-tenant support.
+      </div>
+    </aside>
+
+    <main>
+      <div class="content">
+        <header>
+          <div class="eyebrow">Implementation plan · 17 August 2026</div>
+          <h1>Azure sessions that recover before users lose their flow.</h1>
+          <p class="lede">A complete implementation plan and product mock for proactive Azure CLI session checks, guided browser or device-code reauthentication, multi-tenant visibility, and automatic Kubernetes recovery.</p>
+          <div class="meta">
+            <span class="pill good">Decision-ready v1.0</span>
+            <span class="pill">Tauri 2 + Rust</span>
+            <span class="pill">React 19 + TypeScript</span>
+            <span class="pill">No token storage in KubeCLI</span>
+            <span class="pill">Estimated: 5–7 engineering days</span>
+          </div>
+        </header>
+
+        <section id="outcome">
+          <div class="section-head">
+            <div class="section-no">01 / OUTCOME</div>
+            <div><h2>What this feature changes</h2><p class="section-intro">KubeCLI becomes aware of the authentication lifecycle around Azure-backed kubeconfig contexts. It checks silently, explains failures in user language, and coordinates recovery without owning credentials.</p></div>
+          </div>
+          <div class="grid-3">
+            <article class="card"><h3>Detect early</h3><p>Check the selected Azure context at startup, after config/context changes, and shortly before the current access token expires.</p><div class="metric">≤ 10 min</div><p>maximum background-check interval while active.</p></article>
+            <article class="card"><h3>Recover clearly</h3><p>Replace repeated generic resource errors with one tenant-aware prompt and two clear choices: browser or device code.</p><div class="metric">1 prompt</div><p>deduplicated across concurrent resource failures.</p></article>
+            <article class="card"><h3>Resume work</h3><p>After successful login, verify Azure access, refresh namespaces/resources, and restore the action that was blocked.</p><div class="metric">0 tokens</div><p>stored, logged, or returned to the frontend.</p></article>
+          </div>
+          <div class="callout" style="margin-top:14px"><strong>Technical truth:</strong> Microsoft Entra Conditional Access sign-in frequency is not exposed as a reliable “weekly expiry” timestamp. Proactive behavior therefore means silent token checks and renewal before access-token expiry; the UI prompts only when renewal needs user interaction.</div>
+        </section>
+
+        <section id="mock">
+          <div class="section-head">
+            <div class="section-no">02 / UX MOCK</div>
+            <div><h2>The recovery experience</h2><p class="section-intro">Use the controls below to review the primary product states. The visual language intentionally matches KubeCLI’s current compact, VS Code-like desktop interface.</p></div>
+          </div>
+
+          <div class="mock-controls" role="tablist" aria-label="Mock states">
+            <button class="state-btn active" data-state="healthy">Healthy</button>
+            <button class="state-btn" data-state="expiring">Renewal needed soon</button>
+            <button class="state-btn" data-state="expired">Expired</button>
+            <button class="state-btn" data-state="browser">Browser login</button>
+            <button class="state-btn" data-state="device">Device code</button>
+            <button class="state-btn" data-state="sessions">Session center</button>
+          </div>
+
+          <div class="mock-shell" aria-live="polite">
+            <div class="mock-titlebar">KubeCLI · aks-orders-prod (/home/user/.kube/config)</div>
+            <div class="mock-appbar">
+              <div class="mock-home" aria-hidden="true">⌂</div>
+              <div class="mock-path">Config: <b>/home/user/.kube/config</b></div>
+              <button class="auth-chip" id="authChip"><span class="status-dot" id="chipDot"></span><span id="chipText">Azure · Ready</span><span aria-hidden="true">⌄</span></button>
+              <div class="mock-home" aria-hidden="true">↻</div>
+              <div class="mock-home" aria-hidden="true">⊞</div>
+            </div>
+            <div class="mock-body">
+              <div class="mock-sidebar">
+                <small>CONTEXT</small>
+                <div class="mock-select">aks-orders-prod ▾</div>
+                <small>RESOURCES</small>
+                <div class="mock-resource active">▣ &nbsp; Pods</div>
+                <div class="mock-resource">🚀 &nbsp; Deployments</div>
+                <div class="mock-resource">◉ &nbsp; Services</div>
+                <div class="mock-resource">▤ &nbsp; ConfigMaps</div>
+                <div class="mock-resource">🔒 &nbsp; Secrets</div>
+              </div>
+              <div class="mock-workspace">
+                <div class="mock-tabs">orders-api logs &nbsp;&nbsp; +</div>
+                <div class="terminal-lines">
+                  <div class="prompt">dev@workstation ~</div>
+                  <div>$ kubectl logs orders-api-76c98c5b7f --tail=200 -f</div>
+                  <div class="muted">2026-08-17T09:41:22Z INF service started</div>
+                  <div class="muted">2026-08-17T09:41:23Z INF connected to message bus</div>
+                </div>
+              </div>
+              <div class="mock-table">
+                <div class="mock-table-head">PODS &nbsp; · &nbsp; All namespaces</div>
+                <div class="mock-row"><span>orders</span><span>orders-api-76c98c5b7f</span><span>1/1</span><span>Running</span></div>
+                <div class="mock-row"><span>payments</span><span>payments-worker-55bd97d</span><span>1/1</span><span>Running</span></div>
+                <div class="mock-row"><span>platform</span><span>identity-54f7dd99</span><span>2/2</span><span>Running</span></div>
+              </div>
+              <div id="mockOverlay"></div>
+            </div>
+          </div>
+          <p class="mock-caption" id="mockCaption" style="margin-top:12px">A compact header control keeps authentication visible without competing with the terminal.</p>
+        </section>
+
+        <section id="flow">
+          <div class="section-head">
+            <div class="section-no">03 / USER FLOW</div>
+            <div><h2>One guided loop</h2><p class="section-intro">The same state machine serves startup checks, context changes, scheduled checks, and failures reported by Kubernetes requests.</p></div>
+          </div>
+          <div class="flow">
+            <div class="flow-step"><span>01</span><b>Discover</b><p>Map current kube context to its kubelogin mode and tenant.</p></div>
+            <div class="flow-step"><span>02</span><b>Check silently</b><p>Ask Azure CLI for account metadata and a filtered token-expiry response.</p></div>
+            <div class="flow-step"><span>03</span><b>Explain</b><p>Show cluster, tenant, account, and why interaction is needed.</p></div>
+            <div class="flow-step"><span>04</span><b>Authenticate</b><p>Browser first; device code is one click away and remains in-app.</p></div>
+            <div class="flow-step"><span>05</span><b>Verify &amp; resume</b><p>Recheck session, refresh data, and clear auth-related errors.</p></div>
+          </div>
+        </section>
+
+        <section id="architecture">
+          <div class="section-head">
+            <div class="section-no">04 / ARCHITECTURE</div>
+            <div><h2>Azure CLI remains the credential authority</h2><p class="section-intro">KubeCLI orchestrates status and UX, but Azure CLI and kubelogin continue to own credential acquisition and caching. This prevents a second token store and keeps terminal behavior consistent.</p></div>
+          </div>
+          <div class="architecture">
+            <div class="arch-column">
+              <div class="arch-box"><strong>AuthStatusButton</strong><span>Global account health indicator</span></div>
+              <div class="arch-box"><strong>AzureSessionsDialog</strong><span>Accounts, tenants, clusters</span></div>
+              <div class="arch-box"><strong>ReauthenticationDialog</strong><span>Browser/device-code progress</span></div>
+              <div class="arch-box"><strong>ResourceCacheContext</strong><span>Reports auth failures and retries</span></div>
+            </div>
+            <div class="arch-arrow">⇄</div>
+            <div class="arch-column">
+              <div class="arch-box arch-core"><strong>AuthSessionContext</strong><span>State machine, polling schedule, prompt deduplication, post-login callbacks</span></div>
+              <div class="arch-box"><strong>src/api/auth.ts</strong><span>Typed Tauri invokes and event listeners</span></div>
+              <div class="arch-box"><strong>Tauri auth commands</strong><span>check_azure_auth · start_azure_login · cancel_azure_login</span></div>
+            </div>
+            <div class="arch-arrow">⇄</div>
+            <div class="arch-column">
+              <div class="arch-box"><strong>Kubeconfig</strong><span>Context → exec user → tenant/login mode</span></div>
+              <div class="arch-box"><strong>Azure CLI</strong><span>Accounts, silent renewal, interactive login</span></div>
+              <div class="arch-box"><strong>kubelogin / kubectl</strong><span>Actual AKS credential execution</span></div>
+              <div class="arch-box"><strong>OS credential store</strong><span>Owned by Azure CLI, never KubeCLI</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="contract">
+          <div class="section-head">
+            <div class="section-no">05 / CONTRACTS</div>
+            <div><h2>Small, explicit domain model</h2><p class="section-intro">The frontend receives identity metadata and expiry only. Access tokens, refresh tokens, client secrets, and raw Azure CLI JSON are excluded by construction.</p></div>
+          </div>
+
+          <table class="state-table">
+            <thead><tr><th>State</th><th>Meaning</th><th>UI behavior</th><th>Next check</th></tr></thead>
+            <tbody>
+              <tr><td>notAzure</td><td>Selected context is not Azure CLI-backed.</td><td>Hide Azure control.</td><td>On context/config change.</td></tr>
+              <tr><td>checking</td><td>Status command is in progress.</td><td>Quiet spinner; never block existing terminal work.</td><td>When command completes.</td></tr>
+              <tr><td>active</td><td>Token acquisition/renewal succeeded.</td><td>Green compact chip.</td><td>Earlier of 10 min or expiry − 5 min.</td></tr>
+              <tr><td>expiringSoon</td><td>Last known token remains valid, but silent renewal failed.</td><td>Amber notice; login can be deferred until expiry.</td><td>Every 60 seconds.</td></tr>
+              <tr><td>expired</td><td>No usable Azure CLI credential remains.</td><td>Red chip and guided prompt.</td><td>After login or manual retry.</td></tr>
+              <tr><td>signedOut</td><td>Azure CLI has no matching account/tenant.</td><td>Friendly “Sign in” action.</td><td>After login or manual retry.</td></tr>
+              <tr><td>error</td><td>CLI missing, malformed config, or unknown failure.</td><td>Actionable setup or diagnostics message.</td><td>Manual retry / environment change.</td></tr>
+            </tbody>
+          </table>
+
+          <div class="grid-2" style="margin-top:14px">
+            <div class="card">
+              <h3>Frontend contract</h3>
+<pre><code>export type AzureAuthState =
+  | 'notAzure' | 'checking' | 'active'
+  | 'expiringSoon' | 'expired'
+  | 'signedOut' | 'error';
+
+export interface AzureSessionStatus {
+  state: AzureAuthState;
+  contextName: string;
+  tenantId?: string;
+  account?: { username: string; subscriptionId?: string };
+  expiresAt?: string;
+  affectedContexts: string[];
+  reason?: 'interactionRequired' | 'cliMissing' | 'unknown';
+  safeMessage?: string;
+}</code></pre>
+            </div>
+            <div class="card">
+              <h3>Backend commands and events</h3>
+<pre><code>check_azure_auth(config_path, context_name)
+  -&gt; AzureSessionStatus
+
+start_azure_login(tenant_id, method)
+  -&gt; { login_id }
+
+cancel_azure_login(login_id)
+  -&gt; ()
+
+event: azure-auth-progress
+{ login_id, phase, verification_url?,
+  user_code?, safe_message? }</code></pre>
+            </div>
+          </div>
+          <h4>Safe Azure CLI calls</h4>
+<pre><code class="command">az account list --all \
+  --query '[].{id:id,name:name,tenantId:tenantId,user:user,isDefault:isDefault,state:state}' \
+  --output json --only-show-errors
+
+az account get-access-token --tenant &lt;tenant-id&gt; \
+  --resource https://management.azure.com/ \
+  --query '{expiresOn:expiresOn,expires_on:expires_on,tenant:tenant,subscription:subscription}' \
+  --output json --only-show-errors
+
+az login --tenant &lt;tenant-id&gt; --allow-no-subscriptions --output none
+az login --tenant &lt;tenant-id&gt; --allow-no-subscriptions --use-device-code --output none</code></pre>
+          <p class="section-intro">The <code>--query</code> projection prevents access-token text from entering KubeCLI’s captured stdout. Process errors are normalized to safe categories before they cross IPC.</p>
+        </section>
+
+        <section id="plan">
+          <div class="section-head">
+            <div class="section-no">06 / DELIVERY PLAN</div>
+            <div><h2>Eight test-driven tasks</h2><p class="section-intro">Tasks are ordered to stabilize the domain contract first, then wire backend behavior, then add UI and recovery. Each task ends with focused tests and a small commit.</p></div>
+          </div>
+
+          <details class="task" open>
+            <summary><span class="task-no">01</span><span class="task-summary"><b>Model Azure-backed contexts</b><span>Parse kubeconfig exec users and resolve context → tenant/login mode.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src-tauri/src/azure_auth.rs</code><br><strong>Modify:</strong> <code>src-tauri/src/kube.rs</code>, <code>src-tauri/src/lib.rs</code></div>
+              <ol class="steps">
+                <li>Write Rust unit fixtures for kubelogin <code>--login azurecli</code>, short flags (<code>-t</code>), non-Azure exec users, missing users, and multiple contexts sharing a tenant.</li>
+                <li>Run <code>cargo test azure_auth::tests --manifest-path src-tauri/Cargo.toml</code>; expect failures because discovery types/functions do not exist.</li>
+                <li>Add typed kubeconfig <code>users[].user.exec</code> parsing without retaining auth-provider secrets. Resolve <code>--tenant-id</code>/<code>-t</code>, login mode, and affected contexts.</li>
+                <li>Rerun the focused tests, then all Rust tests.</li>
+                <li>Commit: <code>feat(auth): detect Azure kubeconfig contexts</code>.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">02</span><span class="task-summary"><b>Implement safe session status checks</b><span>Query Azure CLI without returning or logging bearer tokens.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Modify:</strong> <code>src-tauri/src/azure_auth.rs</code>, <code>src-tauri/src/commands.rs</code>, <code>src-tauri/src/lib.rs</code></div>
+              <ol class="steps">
+                <li>Introduce an injected command-runner trait and failing tests for active, signed-out, interaction-required, CLI-missing, malformed-output, and timeout results.</li>
+                <li>Assert in tests that the command includes a field projection and that serialized <code>AzureSessionStatus</code> contains neither <code>accessToken</code> nor raw stderr.</li>
+                <li>Implement <code>check_azure_auth</code> in Tauri’s blocking pool with a 15-second timeout, environment inheritance matching current kubectl execution, safe error classification, and no retry storm.</li>
+                <li>Run <code>cargo test --manifest-path src-tauri/Cargo.toml</code>.</li>
+                <li>Commit: <code>feat(auth): add Azure session status command</code>.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">03</span><span class="task-summary"><b>Stream browser and device-code login</b><span>Start, observe, deduplicate, and cancel interactive Azure CLI processes.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Modify:</strong> <code>src-tauri/src/azure_auth.rs</code>, <code>src-tauri/src/commands.rs</code>, <code>src-tauri/src/lib.rs</code></div>
+              <ol class="steps">
+                <li>Write failing process-runner tests for browser args, device-code args, duplicate login per tenant, code/URL extraction, localized/unparseable output fallback, success, cancellation, and non-zero exit.</li>
+                <li>Add an <code>AzureLoginManager</code> keyed by tenant with generated login IDs. Read stdout and stderr concurrently, emit only sanitized progress fields, and retain a cancellable child handle.</li>
+                <li>On success, immediately execute the safe session status check before emitting <code>verified</code>. Never treat <code>az login</code> exit code alone as success.</li>
+                <li>Run Rust tests and manually inspect debug logs for absence of device codes after completion and absence of any bearer-token-shaped strings.</li>
+                <li>Commit: <code>feat(auth): add guided Azure login flows</code>.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">04</span><span class="task-summary"><b>Add the typed frontend API and state machine</b><span>Centralize polling, transitions, prompt deduplication, and recovery callbacks.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/common/authTypes.ts</code>, <code>src/api/auth.ts</code>, <code>src/api/auth.test.ts</code>, <code>src/contexts/AuthSessionContext.tsx</code>, <code>src/contexts/AuthSessionContext.test.tsx</code><br><strong>Modify:</strong> <code>src/api/index.ts</code>, <code>src/renderer.tsx</code></div>
+              <ol class="steps">
+                <li>Mock Tauri invoke/listen and write failing tests for response conversion, event cleanup, startup check, context-change check, scheduled renewal, no overlapping checks, and one prompt for six simultaneous failures.</li>
+                <li>Implement the API wrapper and <code>AuthSessionProvider</code> with a single timer. Schedule checks at <code>min(now + 10 minutes, expiresAt − 5 minutes)</code>; retry <code>expiringSoon</code> once per minute.</li>
+                <li>Expose <code>status</code>, <code>loginProgress</code>, <code>checkNow</code>, <code>startLogin</code>, <code>cancelLogin</code>, <code>reportAuthFailure</code>, and <code>registerRecovery</code>.</li>
+                <li>Run <code>npm test -- --run src/api/auth.test.ts src/contexts/AuthSessionContext.test.tsx</code> and <code>npm run typecheck</code>.</li>
+                <li>Commit: <code>feat(auth): manage Azure session state</code>.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">05</span><span class="task-summary"><b>Build the global session indicator and center</b><span>Make account and tenant health visible on home and terminal screens.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/components/auth/AuthStatusButton.tsx</code>, <code>src/components/auth/AuthStatusButton.test.tsx</code>, <code>src/components/auth/AzureSessionsDialog.tsx</code>, <code>src/components/auth/AzureSessionsDialog.test.tsx</code><br><strong>Modify:</strong> <code>src/components/screens/HomeScreen.tsx</code>, <code>src/components/screens/TerminalScreen.tsx</code>, <code>src/renderer.tsx</code></div>
+              <ol class="steps">
+                <li>Write failing interaction/accessibility tests for hidden non-Azure state, all status labels, keyboard opening/closing, focus restoration, account/tenant grouping, affected-cluster list, and manual recheck.</li>
+                <li>Implement one shared status button positioned at the app root so both screens use identical session state. Use text plus color; never color alone.</li>
+                <li>Implement a responsive session center. “Use this subscription” must explicitly explain that <code>az account set</code> changes Azure CLI’s global default before confirmation.</li>
+                <li>Run focused component tests, typecheck, and frontend build.</li>
+                <li>Commit: <code>feat(auth): add Azure session center</code>.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">06</span><span class="task-summary"><b>Build friendly reauthentication</b><span>Browser-first dialog, device-code fallback, progress, failure, cancel, and success states.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/components/auth/ReauthenticationDialog.tsx</code>, <code>src/components/auth/ReauthenticationDialog.test.tsx</code><br><strong>Modify:</strong> <code>src/renderer.tsx</code></div>
+              <ol class="steps">
+                <li>Write failing tests for cluster/tenant explanation, primary browser action, device-code switch, copy-code, open-verification-page, waiting state, safe error, retry, cancellation, Esc behavior, and verified auto-close.</li>
+                <li>Implement the approved mock with an accessible dialog, focus trap, <code>aria-live</code> progress, copy confirmation, and a raw-instruction fallback if the installed Azure CLI output cannot be parsed.</li>
+                <li>Do not auto-open the browser repeatedly. One user click starts one login process; duplicate calls reuse the active tenant login.</li>
+                <li>Run focused tests and typecheck.</li>
+                <li>Commit: <code>feat(auth): add guided Azure reauthentication</code>.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">07</span><span class="task-summary"><b>Connect Kubernetes failures to recovery</b><span>Classify auth failures once, pause noisy retries, and refresh after verification.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/common/authErrors.ts</code>, <code>src/common/authErrors.test.ts</code><br><strong>Modify:</strong> <code>src/api/kube.ts</code>, <code>src/contexts/ResourceCacheContext.tsx</code>, <code>src/contexts/ErrorContext.tsx</code></div>
+              <ol class="steps">
+                <li>Write table-driven tests for <code>AADSTS</code>, “run az login”, kubelogin exec-plugin expiry, 401/unauthorized, RBAC 403, network errors, and unrelated errors.</li>
+                <li>Classify Azure-auth failures separately from generic Kubernetes errors. In Rust, skip retries for deterministic auth failures; retries cannot repair expired credentials.</li>
+                <li>When the first resource call reports auth failure, mark the session expired and suppress sibling auth banners. Register one recovery callback that clears auth errors, refreshes namespaces, and calls <code>refresh()</code>.</li>
+                <li>Verify partial RBAC failures remain warnings and never trigger Azure login.</li>
+                <li>Commit: <code>feat(auth): recover Kubernetes loads after login</code>.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">08</span><span class="task-summary"><b>End-to-end hardening and documentation</b><span>Cross-platform checks, security review, packaging, and operator guidance.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>docs/azure-authentication.md</code><br><strong>Modify:</strong> <code>README.md</code>, <code>CHANGELOG.md</code></div>
+              <ol class="steps">
+                <li>Add a component-level happy-path integration test: expired → browser progress → verified → resource refresh.</li>
+                <li>Test Linux/macOS browser flow, device code, missing <code>az</code>, multiple tenants, context switching during login, multiple KubeCLI windows, offline mode, and closing the app mid-login.</li>
+                <li>Document prerequisites, the fact that Azure CLI owns credentials, troubleshooting, and how Conditional Access affects session timing.</li>
+                <li>Run every quality-gate command listed below and inspect the production package manually.</li>
+                <li>Commit: <code>docs(auth): document Azure session management</code>.</li>
+              </ol>
+            </div>
+          </details>
+        </section>
+
+        <section id="quality">
+          <div class="section-head">
+            <div class="section-no">07 / QUALITY GATES</div>
+            <div><h2>Evidence required before release</h2><p class="section-intro">The feature is complete only when automated checks and the real Azure workflows agree. Authentication behavior cannot be established from mocks alone.</p></div>
+          </div>
+          <div class="grid-2">
+            <div class="card"><h3>Automated</h3><pre><code class="command">npm test -- --run
+npm run typecheck
+npm run build:frontend
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
+npm run build</code></pre></div>
+            <div class="card"><h3>Real-flow smoke tests</h3><ul class="plain-list"><li>Valid cached Azure CLI session at startup.</li><li>Forced sign-out followed by browser login.</li><li>Device-code login with copy/open actions.</li><li>Two tenants and two subscriptions.</li><li>Login cancellation and app shutdown.</li><li>Successful resource auto-refresh after verification.</li><li>Logs inspected for secrets, bearer tokens, and device codes.</li></ul></div>
+          </div>
+        </section>
+
+        <section id="risks">
+          <div class="section-head">
+            <div class="section-no">08 / RISKS</div>
+            <div><h2>Known constraints and mitigations</h2><p class="section-intro">These are product boundaries, not hidden implementation details. The UI should state them clearly when relevant.</p></div>
+          </div>
+          <div class="grid-2">
+            <article class="card risk"><h3>No reliable weekly-expiry timestamp</h3><p>Conditional Access may require interaction without exposing the future deadline. Mitigation: scheduled silent renewal and immediate guided recovery when interaction becomes required.</p></article>
+            <article class="card risk"><h3>Azure CLI output varies</h3><p>Device-code text can vary by CLI version or locale. Mitigation: parse URL/code when possible, retain a safe raw instruction fallback, and test supported CLI versions.</p></article>
+            <article class="card risk"><h3>Azure CLI default is global</h3><p>Changing subscriptions can affect terminals and other KubeCLI windows. Mitigation: explicit confirmation, show current/default subscription, then refresh all windows through polling.</p></article>
+            <article class="card risk"><h3>Multiple simultaneous failures</h3><p>Six parallel resource requests currently fail independently. Mitigation: one auth state transition, one tenant login process, one prompt, and one recovery refresh.</p></article>
+            <article class="card risk"><h3>Non-user credentials</h3><p>Service principals, managed identity, workload identity, and <code>azd</code> are not interactive user sessions. Mitigation: identify login mode and show setup diagnostics instead of an <code>az login</code> prompt.</p></article>
+            <article class="card risk"><h3>Browser launch restrictions</h3><p>Remote desktops and locked-down environments may block browser launch. Mitigation: always expose device code and allow Azure CLI’s own browser-to-device-code fallback.</p></article>
+          </div>
+        </section>
+
+        <section id="acceptance">
+          <div class="section-head">
+            <div class="section-no">09 / ACCEPTANCE</div>
+            <div><h2>Definition of done</h2><p class="section-intro">A release candidate must satisfy every item below in a packaged desktop build.</p></div>
+          </div>
+          <ul class="checklist">
+            <li>Azure-backed contexts and tenant IDs are detected from kubeconfig.</li>
+            <li>Non-Azure contexts behave exactly as before.</li>
+            <li>Startup and scheduled checks never expose token content.</li>
+            <li>Browser authentication is the primary recovery action.</li>
+            <li>Device-code instructions, copy, and open-page actions work.</li>
+            <li>Multiple accounts, tenants, subscriptions, and affected clusters are visible.</li>
+            <li>Concurrent failures produce one prompt, not repeated banners.</li>
+            <li>Successful login automatically retries namespaces and resources.</li>
+            <li>RBAC and network failures do not incorrectly request Azure login.</li>
+            <li>Missing Azure CLI produces a setup message with no crash.</li>
+            <li>Login can be canceled and is terminated when the app exits.</li>
+            <li>Automated tests, typecheck, Rust checks, and production build pass.</li>
+          </ul>
+        </section>
+
+        <footer>
+          KubeCLI Azure Session &amp; Reauthentication Implementation Plan · Browser-first, device-code capable · This report is self-contained and has no external assets or runtime dependencies.
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const overlay = document.getElementById('mockOverlay');
+    const chipText = document.getElementById('chipText');
+    const chipDot = document.getElementById('chipDot');
+    const caption = document.getElementById('mockCaption');
+    const buttons = [...document.querySelectorAll('.state-btn')];
+
+    const contextStrip = `
+      <div class="context-strip">
+        <div class="context-item"><span>Cluster</span><b>aks-orders-prod</b></div>
+        <div class="context-item"><span>Tenant</span><b>Contoso Production</b></div>
+      </div>`;
+
+    const states = {
+      healthy: {
+        chip: 'Azure · Ready', dot: '', caption: 'A compact header control keeps authentication visible without competing with the terminal.', overlay: ''
+      },
+      expiring: {
+        chip: 'Azure · Renewal needed', dot: 'amber', caption: 'An amber notice is proactive but deferrable while the last known token remains valid.',
+        overlay: `<div class="mock-toast"><strong>Azure needs your attention soon</strong><p>KubeCLI could not silently renew access for Contoso Production. Current access remains available for about 18 minutes.</p><button class="btn primary">Renew now</button> <button class="btn">Remind me later</button></div>`
+      },
+      expired: {
+        chip: 'Azure · Sign in required', dot: 'red', caption: 'The prompt explains the affected cluster and tenant before asking the user to authenticate.',
+        overlay: `<div class="modal-shade"><div class="modal">
+          <div class="modal-header"><div class="modal-icon">!</div><div><div class="modal-title">Reconnect your Azure account</div><div class="modal-copy">Your Microsoft sign-in for this cluster is no longer valid. Your terminal and Kubernetes configuration are unchanged.</div></div></div>
+          ${contextStrip}
+          <div class="modal-actions"><button class="btn">Not now</button><div class="actions-right"><button class="btn">Use device code</button><button class="btn primary">Continue with browser</button></div></div>
+        </div></div>`
+      },
+      browser: {
+        chip: 'Azure · Signing in…', dot: 'spin', caption: 'Browser progress is calm and specific. KubeCLI verifies the new session before closing the dialog.',
+        overlay: `<div class="modal-shade"><div class="modal">
+          <div class="modal-header"><div class="modal-icon blue">↗</div><div><div class="modal-title">Finish signing in with your browser</div><div class="modal-copy">A secure Microsoft sign-in window should be open. Return here when you are finished.</div></div></div>
+          ${contextStrip}<div class="progress"></div>
+          <div class="modal-actions"><button class="btn">Cancel</button><div class="actions-right"><button class="btn">Use device code instead</button><button class="btn primary">Check again</button></div></div>
+        </div></div>`
+      },
+      device: {
+        chip: 'Azure · Waiting for device', dot: 'spin', caption: 'Device code stays readable and copyable, with a direct button to open Microsoft’s verification page.',
+        overlay: `<div class="modal-shade"><div class="modal">
+          <div class="modal-header"><div class="modal-icon blue">#</div><div><div class="modal-title">Sign in with a device code</div><div class="modal-copy">Open Microsoft’s verification page and enter the one-time code below.</div></div></div>
+          <div class="device-box"><span>MICROSOFT DEVICE CODE</span><div class="device-code">F7KQ-P9WX</div><button class="btn">Copy code</button> <button class="btn primary">Open sign-in page</button></div>
+          <div class="progress"></div><div class="modal-actions"><button class="btn">Cancel</button><div class="actions-right"><button class="btn">Back to browser login</button></div></div>
+        </div></div>`
+      },
+      sessions: {
+        chip: 'Azure · 2 tenants', dot: '', caption: 'The session center groups Azure CLI identity metadata by tenant and shows which Kubernetes contexts depend on each session.',
+        overlay: `<div class="modal-shade"><div class="modal">
+          <div class="modal-header"><div class="modal-icon green">✓</div><div><div class="modal-title">Azure sessions</div><div class="modal-copy">Accounts used by Azure-backed Kubernetes contexts in this kubeconfig.</div></div></div>
+          <div class="session-list">
+            <div class="session-row"><div class="avatar">AD</div><div><b>alex@contoso.com</b><span>Contoso Production · aks-orders-prod, aks-payments-prod</span></div><div class="session-state">Ready</div></div>
+            <div class="session-row"><div class="avatar">AD</div><div><b>alex@fabrikam.com</b><span>Fabrikam Sandbox · aks-labs-west</span></div><div class="session-state warn">Renew soon</div></div>
+          </div>
+          <div class="modal-actions"><button class="btn">Close</button><div class="actions-right"><button class="btn">Check all</button><button class="btn primary">Add account</button></div></div>
+        </div></div>`
+      }
+    };
+
+    function renderState(name) {
+      const state = states[name];
+      chipText.textContent = state.chip;
+      chipDot.className = `status-dot ${state.dot}`.trim();
+      caption.textContent = state.caption;
+      overlay.innerHTML = state.overlay;
+      buttons.forEach(button => button.classList.toggle('active', button.dataset.state === name));
+    }
+
+    buttons.forEach(button => button.addEventListener('click', () => renderState(button.dataset.state)));
+    document.getElementById('authChip').addEventListener('click', () => renderState('sessions'));
+  </script>
+</body>
+</html>
