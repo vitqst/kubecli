@@ -249,6 +249,12 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
 
     // Handle keyboard shortcuts for copy/paste
     xterm.attachCustomKeyEventHandler((event) => {
+      // Pane/tab navigation belongs to TerminalScreen.
+      if ((event.ctrlKey || event.metaKey)
+        && (event.key === 'Tab' || ['t', 'w'].includes(event.key.toLowerCase()))) {
+        return false;
+      }
+
       // Allow global shortcuts to bubble up
       // Ctrl+Shift+P / Cmd+Shift+P - Command Palette
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'P') {

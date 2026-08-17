@@ -1,12 +1,13 @@
 import React, { memo, useMemo, useState, useCallback } from 'react';
 import { Terminal } from '../Terminal';
-import { TabBar } from '../tabs/TabBar';
 import { SlimSidebar } from '../sidebar/SlimSidebar';
 import { ResourcePanel } from '../resource-panel/ResourcePanel';
 import { ContextMenu } from '../sidebar/ContextMenu';
+import { PaneWorkspace } from '../workspace/PaneWorkspace';
 import { ResourceType } from '../../resources';
-import { useTabs } from '../../hooks/useTabs';
-import type { PanelState } from '../../hooks/useTabs';
+import { useWorkspaceLayout } from '../../hooks/useWorkspaceLayout';
+import type { PanelState } from '../../workspace/types';
+import type { PaneId } from '../../workspace/layoutModel';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
 import { useAuthSession } from '../../contexts/AuthSessionContext';
 import { auth, window as windowAPI } from '../../api';
@@ -137,19 +138,47 @@ export function TerminalScreen({
     };
   }, [authRuntimeRevision, kubeconfigPath, selectedContext, runtimeEnvKey]);
 
-  // Tab management (includes per-tab panel state)
+  // Pane-local tab and split management
   const {
+    root,
     tabs,
+    activePaneId,
+    activePane,
     activeTabId,
     activeTab,
+    zoomedPaneId,
     addTab,
     closeTab,
     setActiveTab,
-    updateTabs,
+    splitPane,
+    focusPane,
+    closePane,
+    resizeSplit,
+    toggleZoom,
+    updateTab,
     updateActivePanelState,
     togglePanel,
     closePanel,
-  } = useTabs();
+  } = useWorkspaceLayout();
+
+  const [pendingCommandTarget, setPendingCommandTarget] = useState<string | null>(null);
+  const pendingCommandTargetRef = React.useRef<string | null>(null);
+  const previousPendingCommandRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!pendingCommand) {
+      previousPendingCommandRef.current = null;
+      pendingCommandTargetRef.current = null;
+      setPendingCommandTarget(null);
+      return;
+    }
+
+    if (previousPendingCommandRef.current === pendingCommand) return;
+    previousPendingCommandRef.current = pendingCommand;
+    const target = pendingCommandTargetRef.current ?? activeTabId;
+    pendingCommandTargetRef.current = target;
+    setPendingCommandTarget(target);
+  }, [activeTabId, pendingCommand]);
 
   // Global resource cache refresh
   const { refresh: refreshAllResources, refreshType, isLoading: isRefreshingResources } = useResourceCache();
@@ -166,6 +195,8 @@ export function TerminalScreen({
 
   // Handle command executed - trigger delayed refresh if scheduled
   const handleCommandExecuted = useCallback(() => {
+    pendingCommandTargetRef.current = null;
+    setPendingCommandTarget(null);
     onCommandExecuted?.();
 
     const pending = pendingRefreshRef.current;
@@ -201,21 +232,24 @@ export function TerminalScreen({
   ) => {
     const ns = namespace || selectedNamespace;
     // Rename the active tab to the resource
-    updateTabs(prev => prev.map(tab => (
-      tab.id === activeTabId
-        ? { ...tab, label: resourceName, resourceRef: { type: resourceType, name: resourceName, namespace: ns, action: actionId } }
-        : tab
-    )));
+    updateTab(activeTabId, (tab) => ({
+      ...tab,
+      label: resourceName,
+      resourceRef: { type: resourceType, name: resourceName, namespace: ns, action: actionId },
+    }));
+
+    pendingCommandTargetRef.current = activeTabId;
+    setPendingCommandTarget(activeTabId);
 
     onResourceAction(actionId, resourceType, resourceName, ns);
-  }, [activeTabId, onResourceAction, selectedNamespace, updateTabs]);
+  }, [activeTabId, onResourceAction, selectedNamespace, updateTab]);
 
   // Duplicate dialog is no longer needed (no new tabs on action)
 
   // Add new blank tab
-  const handleAddTab = useCallback(() => {
-    addTab({ label: 'Terminal' });
-  }, [addTab]);
+  const handleAddTab = useCallback((paneId: PaneId = activePaneId) => {
+    addTab({ label: 'Terminal' }, paneId);
+  }, [activePaneId, addTab]);
 
   // Context menu state for resource actions
   const [contextMenu, setContextMenu] = useState<{
@@ -242,37 +276,37 @@ export function TerminalScreen({
 
   /**
    * Global keyboard shortcuts for tab navigation
-   * - Ctrl+Tab / Ctrl+Shift+Tab: cycle tabs
-   * - Ctrl+W: close current tab (except default)
-   * - Ctrl+T: open new blank tab
+   * - Ctrl/Cmd+Tab / Ctrl/Cmd+Shift+Tab: cycle tabs in the focused pane
+   * - Ctrl/Cmd+W: close the focused pane's current tab
+   * - Ctrl/Cmd+T: open a tab in the focused pane
    */
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'Tab') {
+      const modifier = e.ctrlKey || e.metaKey;
+
+      if (modifier && e.key === 'Tab') {
         e.preventDefault();
-        const currentIndex = tabs.findIndex(t => t.id === activeTabId);
+        const currentIndex = activePane.tabIds.indexOf(activeTabId);
         const nextIndex = e.shiftKey
-          ? (currentIndex - 1 + tabs.length) % tabs.length
-          : (currentIndex + 1) % tabs.length;
-        setActiveTab(tabs[nextIndex].id);
+          ? (currentIndex - 1 + activePane.tabIds.length) % activePane.tabIds.length
+          : (currentIndex + 1) % activePane.tabIds.length;
+        setActiveTab(activePaneId, activePane.tabIds[nextIndex]);
       }
 
-      if (e.ctrlKey && e.key === 'w') {
+      if (modifier && e.key.toLowerCase() === 'w') {
         e.preventDefault();
-        if (activeTabId !== 'default') {
-          closeTab(activeTabId);
-        }
+        closeTab(activeTabId, activePaneId);
       }
 
-      if (e.ctrlKey && e.key === 't') {
+      if (modifier && e.key.toLowerCase() === 't') {
         e.preventDefault();
-        handleAddTab();
+        handleAddTab(activePaneId);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tabs, activeTabId, setActiveTab, closeTab, handleAddTab]);
+  }, [activePane, activePaneId, activeTabId, setActiveTab, closeTab, handleAddTab]);
 
   return (
     <>
@@ -359,37 +393,34 @@ export function TerminalScreen({
 
         {/* Terminal Area */}
         <div style={styles.terminalArea}>
-          {/* Tab Bar */}
-          <TabBar
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onTabClick={setActiveTab}
-            onTabClose={closeTab}
-            onAddTab={handleAddTab}
-          />
-
           {/* Terminal Content */}
           <div style={styles.terminalContent}>
-            {/* Terminals - show only active */}
             <div style={styles.terminalWrapper}>
-              {tabs.map(tab => (
-                <div
-                  key={tab.id}
-                  style={{
-                    ...styles.terminalPane,
-                    display: tab.id === activeTabId ? 'flex' : 'none',
-                  }}
-                >
+              <PaneWorkspace
+                root={root}
+                tabs={tabs}
+                activePaneId={activePaneId}
+                zoomedPaneId={zoomedPaneId}
+                onFocusPane={focusPane}
+                onActivateTab={setActiveTab}
+                onCloseTab={(paneId, tabId) => closeTab(tabId, paneId)}
+                onAddTab={handleAddTab}
+                onResizeSplit={resizeSplit}
+                onSplitPane={splitPane}
+                onClosePane={closePane}
+                onToggleZoom={toggleZoom}
+                renderTab={(tab, _active, _paneId, onContextMenuRequest) => (
                   <Terminal
                     id={tab.id}
                     env={terminalEnv}
                     isLoading={isConfigChanging}
-                    pendingCommand={tab.id === activeTabId ? pendingCommand : null}
+                    pendingCommand={tab.id === pendingCommandTarget ? pendingCommand : null}
                     onCommandExecuted={handleCommandExecuted}
                     onEditModeChange={onEditModeChange}
+                    onContextMenuRequest={onContextMenuRequest}
                   />
-                </div>
-              ))}
+                )}
+              />
             </div>
 
           {/* Resource Panel - now controlled, uses active tab's panel state */}
@@ -507,13 +538,5 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     overflow: 'hidden',
     position: 'relative',
-  },
-  terminalPane: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'column',
   },
 };
