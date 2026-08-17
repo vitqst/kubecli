@@ -3,6 +3,7 @@ import type { LayoutNode, PaneId, PaneLeaf, TabId } from '../../workspace/layout
 import type { Tab } from '../../workspace/types';
 import { PaneHeader } from './PaneHeader';
 import { SplitHandle } from './SplitHandle';
+import type { TerminalMenuRequest } from './PaneContextMenu';
 
 export interface PaneNodeProps {
   node: LayoutNode;
@@ -14,7 +15,18 @@ export interface PaneNodeProps {
   onCloseTab: (paneId: PaneId, tabId: TabId) => void;
   onAddTab: (paneId: PaneId) => void;
   onResizeSplit: (splitId: string, ratio: number) => void;
-  renderTab: (tab: Tab, active: boolean, paneId: PaneId) => React.ReactNode;
+  onOpenContextMenu: (
+    paneId: PaneId,
+    x: number,
+    y: number,
+    terminalRequest?: TerminalMenuRequest,
+  ) => void;
+  renderTab: (
+    tab: Tab,
+    active: boolean,
+    paneId: PaneId,
+    onContextMenuRequest: (request: TerminalMenuRequest) => void,
+  ) => React.ReactNode;
 }
 
 function SplitPaneView(props: PaneNodeProps & { node: Extract<LayoutNode, { kind: 'split' }> }) {
@@ -56,6 +68,7 @@ function PaneLeafView({
   onActivateTab,
   onCloseTab,
   onAddTab,
+  onOpenContextMenu,
   renderTab,
 }: Omit<PaneNodeProps, 'node'> & { pane: PaneLeaf }) {
   const paneTabs = pane.tabIds.map((tabId) => tabs[tabId]).filter(Boolean);
@@ -80,6 +93,11 @@ function PaneLeafView({
       tabIndex={-1}
       onPointerDown={() => onFocusPane(pane.id)}
       onFocusCapture={() => onFocusPane(pane.id)}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onFocusPane(pane.id);
+        onOpenContextMenu(pane.id, event.clientX, event.clientY);
+      }}
     >
       <PaneHeader
         paneId={pane.id}
@@ -101,7 +119,10 @@ function PaneLeafView({
               hidden={!active}
               aria-hidden={!active ? 'true' : undefined}
             >
-              {renderTab(tab, active, pane.id)}
+              {renderTab(tab, active, pane.id, (request) => {
+                onFocusPane(pane.id);
+                onOpenContextMenu(pane.id, request.x, request.y, request);
+              })}
             </div>
           );
         })}

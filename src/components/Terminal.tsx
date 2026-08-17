@@ -4,10 +4,11 @@ import { FitAddon } from 'xterm-addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import 'xterm/css/xterm.css';
 import { terminal as terminalApi } from '../api';
+import type { TerminalMenuRequest } from './workspace/PaneContextMenu';
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
 
-interface TerminalProps {
+export interface TerminalProps {
   id: string;
   cwd?: string;
   env?: Record<string, string>;
@@ -16,10 +17,11 @@ interface TerminalProps {
   onReady?: () => void;
   onExit?: (exitCode: number, signal?: number) => void;
   onEditModeChange?: (isEditMode: boolean) => void;
+  onContextMenuRequest?: (request: TerminalMenuRequest) => void;
   isLoading?: boolean;
 }
 
-export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onReady, onExit, onEditModeChange, isLoading = false }: TerminalProps) {
+export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onReady, onExit, onEditModeChange, onContextMenuRequest, isLoading = false }: TerminalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -290,97 +292,6 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
       return true; // Allow other keys
     });
 
-    // Handle right-click context menu for copy/paste
-    const contextMenuHandler = (e: MouseEvent) => {
-      e.preventDefault();
-
-      const selection = xterm.getSelection();
-
-      // Create context menu
-      const menu = document.createElement('div');
-      menu.style.position = 'fixed';
-      menu.style.left = `${e.clientX}px`;
-      menu.style.top = `${e.clientY}px`;
-      menu.style.backgroundColor = '#2d2d30';
-      menu.style.border = '1px solid #454545';
-      menu.style.borderRadius = '4px';
-      menu.style.padding = '4px 0';
-      menu.style.zIndex = '10000';
-      menu.style.minWidth = '150px';
-      menu.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-
-      // Copy option (only if text is selected)
-      if (selection) {
-        const copyItem = document.createElement('div');
-        copyItem.textContent = 'Copy';
-        copyItem.style.padding = '6px 12px';
-        copyItem.style.cursor = 'pointer';
-        copyItem.style.color = '#cccccc';
-        copyItem.style.fontSize = '13px';
-        copyItem.onmouseover = () => copyItem.style.backgroundColor = '#094771';
-        copyItem.onmouseout = () => copyItem.style.backgroundColor = 'transparent';
-        copyItem.onclick = () => {
-          navigator.clipboard.writeText(selection);
-          document.body.removeChild(menu);
-        };
-        menu.appendChild(copyItem);
-      }
-
-      // Paste option
-      const pasteItem = document.createElement('div');
-      pasteItem.textContent = 'Paste';
-      pasteItem.style.padding = '6px 12px';
-      pasteItem.style.cursor = 'pointer';
-      pasteItem.style.color = '#cccccc';
-      pasteItem.style.fontSize = '13px';
-      pasteItem.onmouseover = () => pasteItem.style.backgroundColor = '#094771';
-      pasteItem.onmouseout = () => pasteItem.style.backgroundColor = 'transparent';
-      pasteItem.onclick = async () => {
-        try {
-          const text = await navigator.clipboard.readText();
-          if (terminalIdRef.current && isMountedRef.current) {
-            terminalApi.write(terminalIdRef.current, text);
-          }
-        } catch (err) {
-          console.error('Failed to read clipboard:', err);
-        }
-        document.body.removeChild(menu);
-      };
-      menu.appendChild(pasteItem);
-
-      // Clear selection option (only if text is selected)
-      if (selection) {
-        const clearItem = document.createElement('div');
-        clearItem.textContent = 'Clear Selection';
-        clearItem.style.padding = '6px 12px';
-        clearItem.style.cursor = 'pointer';
-        clearItem.style.color = '#cccccc';
-        clearItem.style.fontSize = '13px';
-        clearItem.onmouseover = () => clearItem.style.backgroundColor = '#094771';
-        clearItem.onmouseout = () => clearItem.style.backgroundColor = 'transparent';
-        clearItem.onclick = () => {
-          xterm.clearSelection();
-          document.body.removeChild(menu);
-        };
-        menu.appendChild(clearItem);
-      }
-
-      document.body.appendChild(menu);
-
-      // Close menu on click outside
-      const closeMenu = (event: MouseEvent) => {
-        if (!menu.contains(event.target as Node)) {
-          if (document.body.contains(menu)) {
-            document.body.removeChild(menu);
-          }
-          document.removeEventListener('click', closeMenu);
-        }
-      };
-      setTimeout(() => document.addEventListener('click', closeMenu), 0);
-    };
-
-    terminalRef.current.addEventListener('contextmenu', contextMenuHandler);
-
     // Handle window resize - make terminal grow with window
     const handleResize = () => {
       // Early return if component is unmounted
@@ -518,6 +429,30 @@ export function Terminal({ id, cwd, env, pendingCommand, onCommandExecuted, onRe
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div
         ref={terminalRef}
+        data-testid={`terminal-surface-${id}`}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!onContextMenuRequest || !xtermRef.current) return;
+          const xterm = xtermRef.current;
+          const selection = xterm.getSelection();
+          onContextMenuRequest({
+            x: event.clientX,
+            y: event.clientY,
+            selection,
+            copySelection: () => selection
+              ? navigator.clipboard.writeText(selection)
+              : Promise.resolve(),
+            paste: async () => {
+              const text = await navigator.clipboard.readText();
+              if (terminalIdRef.current && isMountedRef.current) {
+                await terminalApi.write(terminalIdRef.current, text);
+              }
+            },
+            clearSelection: () => xterm.clearSelection(),
+            focus: () => xterm.focus(),
+          });
+        }}
         style={{
           width: '100%',
           height: '100%',

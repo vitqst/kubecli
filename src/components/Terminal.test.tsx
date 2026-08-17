@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { Terminal } from '../components/Terminal';
+
+const xtermMocks = vi.hoisted(() => ({
+  getSelection: vi.fn().mockReturnValue(''),
+  clearSelection: vi.fn(),
+}));
 
 // Mock ResizeObserver which is not available in jsdom
 class MockResizeObserver {
@@ -21,8 +26,8 @@ vi.mock('xterm', () => {
     onData = vi.fn().mockReturnValue({ dispose: vi.fn() });
     attachCustomKeyEventHandler = vi.fn();
     loadAddon = vi.fn();
-    getSelection = vi.fn().mockReturnValue('');
-    clearSelection = vi.fn();
+    getSelection = xtermMocks.getSelection;
+    clearSelection = xtermMocks.clearSelection;
     focus = vi.fn();
     buffer = { active: {} };
     element = { clientWidth: 800, clientHeight: 600 };
@@ -68,6 +73,7 @@ describe('Terminal Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    xtermMocks.getSelection.mockReturnValue('');
     dataListener = null;
     exitListener = null;
 
@@ -318,6 +324,41 @@ describe('Terminal Component', () => {
           data: "export AZURE_TENANT_ID='tenant-new'; unset AZURE_CLIENT_ID",
         });
       }, { timeout: 1500 });
+    });
+  });
+
+  describe('Context Menu', () => {
+    it('delegates terminal actions to the shared pane context menu', async () => {
+      const onContextMenuRequest = vi.fn();
+      const clipboard = {
+        writeText: vi.fn().mockResolvedValue(undefined),
+        readText: vi.fn().mockResolvedValue('paste me'),
+      };
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard });
+      xtermMocks.getSelection.mockReturnValue('selected output');
+      render(<Terminal id="test" onContextMenuRequest={onContextMenuRequest} />);
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith('terminal_create', expect.anything());
+      });
+
+      fireEvent.contextMenu(screen.getByTestId('terminal-surface-test'), {
+        clientX: 120,
+        clientY: 240,
+      });
+
+      expect(onContextMenuRequest).toHaveBeenCalledTimes(1);
+      const request = onContextMenuRequest.mock.calls[0][0];
+      expect(request).toMatchObject({ x: 120, y: 240, selection: 'selected output' });
+
+      await request.copySelection();
+      expect(clipboard.writeText).toHaveBeenCalledWith('selected output');
+      await request.paste();
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_write', {
+        terminalId: 'term_test_1',
+        data: 'paste me',
+      });
+      request.clearSelection();
+      expect(xtermMocks.clearSelection).toHaveBeenCalledTimes(1);
     });
   });
 

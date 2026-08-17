@@ -132,3 +132,40 @@
   inset: 0;
   z-index: 3;
 }
+
+.workspace-context-menu {
+  position: fixed;
+  z-index: 10000;
+  width: 190px;
+  padding: 5px;
+  border: 1px solid #474c51;
+  border-radius: 7px;
+  background: #2d2d30;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, .45);
+}
+
+.workspace-context-menu button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 21px 1fr;
+  gap: 6px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #e2e2e2;
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.workspace-context-menu button:hover:not(:disabled),
+.workspace-context-menu button:focus-visible {
+  outline: none;
+  background: #094771;
+}
+
+.workspace-context-menu button:disabled { color: #737373; cursor: not-allowed; }
+.workspace-context-menu .workspace-context-danger { color: #f26d63; }
+.workspace-context-separator { height: 1px; margin: 4px 7px; background: #494949; }
