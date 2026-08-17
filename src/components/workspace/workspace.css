@@ -30,9 +30,37 @@
 .workspace-split-child--first { flex: 0 0 auto; }
 .workspace-split-child--second { flex: 1 1 0; }
 
-.workspace-divider { flex: 0 0 1px; background: #3e3e42; }
-.workspace-divider--row { width: 1px; cursor: col-resize; }
-.workspace-divider--column { height: 1px; cursor: row-resize; }
+.workspace-split-handle {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 8px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: #2f3235;
+  touch-action: none;
+  user-select: none;
+}
+
+.workspace-split-handle::after {
+  content: '';
+  display: block;
+  border-radius: 99px;
+  background: #71777c;
+}
+
+.workspace-split-handle--row { width: 8px; cursor: col-resize; }
+.workspace-split-handle--column { height: 8px; cursor: row-resize; }
+.workspace-split-handle--row::after { width: 2px; height: 24px; }
+.workspace-split-handle--column::after { width: 24px; height: 2px; }
+
+.workspace-split-handle:hover,
+.workspace-split-handle:focus-visible,
+.workspace-split-handle--dragging {
+  outline: none;
+  background: rgba(78, 201, 176, .38);
+}
 
 .workspace-pane {
   position: relative;
@@ -94,7 +122,7 @@
   display: contents;
 }
 
-.workspace-layout--zoomed .workspace-divider,
+.workspace-layout--zoomed .workspace-split-handle,
 .workspace-pane--zoom-hidden {
   display: none;
 }

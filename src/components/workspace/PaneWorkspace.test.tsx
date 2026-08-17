@@ -45,6 +45,7 @@ function renderWorkspace(overrides: Partial<React.ComponentProps<typeof PaneWork
     onActivateTab: vi.fn(),
     onCloseTab: vi.fn(),
     onAddTab: vi.fn(),
+    onResizeSplit: vi.fn(),
     renderTab: (currentTab) => (
       <div data-testid={`terminal-${currentTab.id}`}>{currentTab.label} terminal</div>
     ),

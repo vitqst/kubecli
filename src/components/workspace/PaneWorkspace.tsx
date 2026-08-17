@@ -13,6 +13,7 @@ export interface PaneWorkspaceProps {
   onActivateTab: (paneId: PaneId, tabId: TabId) => void;
   onCloseTab: (paneId: PaneId, tabId: TabId) => void;
   onAddTab: (paneId: PaneId) => void;
+  onResizeSplit: (splitId: string, ratio: number) => void;
   renderTab: (tab: Tab, active: boolean, paneId: PaneId) => React.ReactNode;
 }
 

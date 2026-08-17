@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import type { LayoutNode, PaneId, PaneLeaf, TabId } from '../../workspace/layoutModel';
 import type { Tab } from '../../workspace/types';
 import { PaneHeader } from './PaneHeader';
+import { SplitHandle } from './SplitHandle';
 
 export interface PaneNodeProps {
   node: LayoutNode;
@@ -12,7 +13,38 @@ export interface PaneNodeProps {
   onActivateTab: (paneId: PaneId, tabId: TabId) => void;
   onCloseTab: (paneId: PaneId, tabId: TabId) => void;
   onAddTab: (paneId: PaneId) => void;
+  onResizeSplit: (splitId: string, ratio: number) => void;
   renderTab: (tab: Tab, active: boolean, paneId: PaneId) => React.ReactNode;
+}
+
+function SplitPaneView(props: PaneNodeProps & { node: Extract<LayoutNode, { kind: 'split' }> }) {
+  const { node } = props;
+  const [previewRatio, setPreviewRatio] = useState(node.ratio);
+
+  useEffect(() => setPreviewRatio(node.ratio), [node.ratio]);
+
+  return (
+    <div
+      className={`workspace-split workspace-split--${node.direction}`}
+      data-split-id={node.id}
+    >
+      <div
+        className="workspace-split-child workspace-split-child--first"
+        style={{ flexBasis: `${previewRatio * 100}%` }}
+      >
+        <PaneNode {...props} node={node.first} />
+      </div>
+      <SplitHandle
+        direction={node.direction}
+        ratio={node.ratio}
+        onPreviewRatio={setPreviewRatio}
+        onResize={(ratio) => props.onResizeSplit(node.id, ratio)}
+      />
+      <div className="workspace-split-child workspace-split-child--second">
+        <PaneNode {...props} node={node.second} />
+      </div>
+    </div>
+  );
 }
 
 function PaneLeafView({
@@ -81,22 +113,5 @@ function PaneLeafView({
 export function PaneNode(props: PaneNodeProps) {
   const { node } = props;
   if (node.kind === 'leaf') return <PaneLeafView {...props} pane={node} />;
-
-  return (
-    <div
-      className={`workspace-split workspace-split--${node.direction}`}
-      data-split-id={node.id}
-    >
-      <div
-        className="workspace-split-child workspace-split-child--first"
-        style={{ flexBasis: `${node.ratio * 100}%` }}
-      >
-        <PaneNode {...props} node={node.first} />
-      </div>
-      <div className={`workspace-divider workspace-divider--${node.direction}`} aria-hidden="true" />
-      <div className="workspace-split-child workspace-split-child--second">
-        <PaneNode {...props} node={node.second} />
-      </div>
-    </div>
-  );
+  return <SplitPaneView {...props} node={node} />;
 }
