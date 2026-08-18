@@ -24,6 +24,15 @@ describe('useWorkspaceLayout', () => {
     expect(result.current.visibleTabIds).toEqual(['default']);
   });
 
+  it('does not update workspace state when the active pane receives focus again', () => {
+    const { result } = renderHook(() => useWorkspaceLayout({ idFactory: deterministicIds() }));
+    const initialState = result.current.state;
+
+    act(() => result.current.focusPane('pane-default'));
+
+    expect(result.current.state).toBe(initialState);
+  });
+
   it('adds and activates a tab in the focused pane', () => {
     const { result } = renderHook(() => useWorkspaceLayout({ idFactory: deterministicIds() }));
 

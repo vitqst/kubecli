@@ -73,7 +73,15 @@ function StableTabHost({
   }, [host, layoutRevision, tab.id, workspaceRef]);
 
   return createPortal(
-    renderTab(tab, active, paneId, handleContextMenuRequest),
+    <div
+      className="workspace-terminal-event-boundary"
+      // Portal events follow the React tree, not the pane DOM tree. Capture
+      // ownership here before xterm consumes the press or receives keyboard focus.
+      onPointerDownCapture={() => onFocusPane(paneId)}
+      onFocusCapture={() => onFocusPane(paneId)}
+    >
+      {renderTab(tab, active, paneId, handleContextMenuRequest)}
+    </div>,
     host,
     tab.id,
   );

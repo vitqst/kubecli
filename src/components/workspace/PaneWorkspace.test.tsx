@@ -96,6 +96,18 @@ describe('PaneWorkspace', () => {
     expect(props.onFocusPane).toHaveBeenCalledWith('pane-shell');
   });
 
+  it('focuses the owning pane when a portaled terminal input receives focus', () => {
+    const onFocusPane = vi.fn();
+    renderWorkspace({
+      onFocusPane,
+      renderTab: (currentTab) => <textarea aria-label={`${currentTab.label} input`} />,
+    });
+
+    fireEvent.focus(screen.getByRole('textbox', { name: 'shell input' }));
+
+    expect(onFocusPane).toHaveBeenCalledWith('pane-shell');
+  });
+
   it('focuses the owning pane before activating its local tab', () => {
     const calls: string[] = [];
     renderWorkspace({

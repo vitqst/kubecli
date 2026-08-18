@@ -106,6 +106,7 @@ function removeTabs(tabs: WorkspaceState['tabs'], tabIds: TabId[]): WorkspaceSta
 export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
   switch (action.type) {
     case 'focus-pane':
+      if (state.activePaneId === action.paneId) return state;
       return findLeaf(state.root, action.paneId)
         ? { ...state, activePaneId: action.paneId }
         : state;
