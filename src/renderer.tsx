@@ -49,6 +49,7 @@ function App() {
   const [promptDialog, setPromptDialog] = useState<{
     actionId: string;
     context: ResourceActionContext;
+    targetTabId?: string;
     title: string;
     prompts?: any[];
     confirmMessage?: string;
@@ -56,7 +57,11 @@ function App() {
   const [isInEditMode, setIsInEditMode] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
   const [isKubectlPaletteOpen, setIsKubectlPaletteOpen] = useState<boolean>(false);
-  const [pendingCommand, setPendingCommand] = useState<string | null>(null);
+  const [pendingCommandRequest, setPendingCommandRequest] = useState<{
+    command: string;
+    targetTabId: string | null;
+  } | null>(null);
+  const [activeTerminalTabId, setActiveTerminalTabId] = useState('default');
   // Store pending refresh info - use state so it triggers re-render and passes to TerminalScreen
   const [pendingRefresh, setPendingRefresh] = useState<{ type: ResourceType; delayMs: number } | null>(null);
 
@@ -212,7 +217,13 @@ function App() {
 
   // Handle resource action
   const handleResourceAction = useCallback(
-    (actionId: string, resourceType: ResourceType, resourceName: string, customNamespace?: string) => {
+    (
+      actionId: string,
+      resourceType: ResourceType,
+      resourceName: string,
+      customNamespace?: string,
+      targetTabId?: string,
+    ) => {
       if (!selectedNamespace) return;
 
       if (isInEditMode) {
@@ -221,6 +232,7 @@ function App() {
       }
 
       const namespace = customNamespace || selectedNamespace;
+      const resolvedTargetTabId = targetTabId ?? activeTerminalTabId;
 
       const context: ResourceActionContext = {
         resourceName,
@@ -248,6 +260,7 @@ function App() {
         setPromptDialog({
           actionId,
           context,
+          targetTabId: resolvedTargetTabId,
           title: `${action.label} - ${resourceName}`,
           prompts: action.prompts,
           confirmMessage: confirmMsg,
@@ -255,13 +268,18 @@ function App() {
         return;
       }
 
-      executeAction(actionId, context, {});
+      executeAction(actionId, context, {}, resolvedTargetTabId);
     },
-    [selectedNamespace, isInEditMode]
+    [activeTerminalTabId, selectedNamespace, isInEditMode]
   );
 
   // Execute action with prompt values
-  const executeAction = useCallback((actionId: string, context: ResourceActionContext, promptValues: Record<string, any>) => {
+  const executeAction = useCallback((
+    actionId: string,
+    context: ResourceActionContext,
+    promptValues: Record<string, any>,
+    targetTabId?: string,
+  ) => {
     const resource = getResourceDefinition(context.resourceType);
     if (!resource) return;
 
@@ -283,12 +301,12 @@ function App() {
     if (!showTerminal) {
       setShowTerminal(true);
     }
-    setPendingCommand(command);
+    setPendingCommandRequest({ command, targetTabId: targetTabId ?? null });
   }, [showTerminal]);
 
   // Handle command executed callback - clear pending command
   const handleCommandExecuted = useCallback(() => {
-    setPendingCommand(null);
+    setPendingCommandRequest(null);
     // Clear the pending refresh (the actual refresh is handled by TerminalScreen)
     setPendingRefresh(null);
   }, []);
@@ -297,7 +315,12 @@ function App() {
   const handlePromptConfirm = useCallback((values: Record<string, any>) => {
     if (!promptDialog) return;
     
-    executeAction(promptDialog.actionId, promptDialog.context, values);
+    executeAction(
+      promptDialog.actionId,
+      promptDialog.context,
+      values,
+      promptDialog.targetTabId,
+    );
     setPromptDialog(null);
   }, [promptDialog, executeAction]);
 
@@ -327,8 +350,8 @@ function App() {
     if (!showTerminal) {
       setShowTerminal(true);
     }
-    setPendingCommand(command);
-  }, [showTerminal]);
+    setPendingCommandRequest({ command, targetTabId: activeTerminalTabId });
+  }, [activeTerminalTabId, showTerminal]);
 
   // Handle go home
   const handleGoHome = useCallback(() => {
@@ -413,7 +436,8 @@ function App() {
           loadingNamespaces={loadingNamespaces}
           isInEditMode={isInEditMode}
           isConfigChanging={isConfigChanging}
-          pendingCommand={pendingCommand}
+          pendingCommand={pendingCommandRequest?.command ?? null}
+          pendingCommandTargetTabId={pendingCommandRequest?.targetTabId ?? null}
           pendingRefresh={pendingRefresh}
           onCommandExecuted={handleCommandExecuted}
           onConfigChange={handleConfigChange}
@@ -421,6 +445,7 @@ function App() {
           onNamespaceChange={handleNamespaceChange}
           onResourceAction={handleResourceAction}
           onEditModeChange={handleEditModeChange}
+          onActiveTabChange={setActiveTerminalTabId}
           onGoHome={handleGoHome}
           authStatus={<AuthStatusButton />}
         />

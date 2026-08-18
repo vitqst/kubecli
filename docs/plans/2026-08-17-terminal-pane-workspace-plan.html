@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KubeCLI Terminal Pane Workspace Plan</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #101214;
+      --panel: #181b1f;
+      --panel-2: #202429;
+      --panel-3: #272c32;
+      --terminal: #1e1e1e;
+      --chrome: #252526;
+      --line: #363c43;
+      --line-soft: #292e34;
+      --text: #edf1f3;
+      --muted: #9aa3ab;
+      --subtle: #727c85;
+      --teal: #4ec9b0;
+      --teal-soft: rgba(78, 201, 176, .13);
+      --blue: #1683c5;
+      --amber: #e7ad45;
+      --amber-soft: rgba(231, 173, 69, .13);
+      --red: #f26d63;
+      --red-soft: rgba(242, 109, 99, .12);
+      --green: #6fd39b;
+      --radius: 11px;
+      --shadow: 0 24px 60px rgba(0, 0, 0, .34);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 84% -8%, rgba(78, 201, 176, .08), transparent 31rem),
+        var(--page);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    button { font: inherit; }
+    a { color: inherit; }
+    code, pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    code { color: #b9e6dc; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 27px 20px;
+      border-right: 1px solid var(--line-soft);
+      background: rgba(16, 18, 20, .9);
+      backdrop-filter: blur(14px);
+      overflow-y: auto;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 31px; }
+    .brand-mark {
+      width: 35px; height: 35px; display: grid; place-items: center;
+      border: 1px solid rgba(78, 201, 176, .35); border-radius: 9px;
+      background: var(--teal-soft); color: var(--teal); font-weight: 800;
+    }
+    .brand strong, .brand span { display: block; }
+    .brand strong { font-size: 14px; letter-spacing: .01em; }
+    .brand span { color: var(--muted); font-size: 11px; }
+    .nav-label { margin: 22px 10px 8px; color: var(--subtle); font-size: 10px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    .nav { display: grid; gap: 3px; }
+    .nav a { padding: 8px 10px; border-radius: 7px; color: var(--muted); text-decoration: none; font-size: 13px; }
+    .nav a:hover { color: var(--text); background: var(--panel-2); }
+    .decision-chip { margin-top: 27px; padding: 12px; border: 1px solid rgba(78, 201, 176, .25); border-radius: 9px; background: var(--teal-soft); color: #cbf2e9; font-size: 12px; }
+    .decision-chip strong { display: block; margin-bottom: 3px; }
+
+    main { min-width: 0; padding: 56px clamp(27px, 5vw, 76px) 100px; }
+    .content { width: min(1180px, 100%); margin: 0 auto; }
+    .eyebrow { color: var(--teal); font-size: 11px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    h1 { max-width: 920px; margin: 12px 0 18px; font-size: clamp(39px, 6vw, 68px); line-height: 1.01; letter-spacing: -.046em; }
+    .lede { max-width: 830px; margin: 0; color: #b5bdc4; font-size: 18px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 9px; margin: 26px 0 48px; }
+    .pill { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 11px; }
+    .pill.good { border-color: rgba(78, 201, 176, .3); background: var(--teal-soft); color: #cbf2e9; }
+
+    section { scroll-margin-top: 28px; margin-top: 76px; }
+    .section-head { display: grid; grid-template-columns: 160px 1fr; gap: 28px; margin-bottom: 26px; }
+    .section-no { color: var(--teal); font: 750 11px/1.5 "SFMono-Regular", Consolas, monospace; letter-spacing: .12em; }
+    h2 { margin: 0 0 8px; font-size: 30px; letter-spacing: -.027em; }
+    h3 { margin: 0 0 8px; font-size: 17px; }
+    h4 { margin: 20px 0 7px; font-size: 13px; }
+    p { margin: 0 0 14px; }
+    .section-intro { max-width: 790px; color: var(--muted); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .card { padding: 20px; border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--panel); }
+    .card p, .card li { color: var(--muted); font-size: 13px; }
+    .plain-list { margin: 10px 0 0; padding-left: 18px; }
+    .plain-list li + li { margin-top: 7px; }
+    .callout { padding: 16px 18px; border-left: 3px solid var(--amber); border-radius: 5px 10px 10px 5px; background: var(--amber-soft); color: #e8d3aa; font-size: 13px; }
+    .callout.teal { border-color: var(--teal); background: var(--teal-soft); color: #cceee7; }
+
+    /* Interactive product prototype */
+    .prototype-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 13px; }
+    .state-btn { padding: 8px 11px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--muted); cursor: pointer; font-size: 11px; }
+    .state-btn:hover, .state-btn.active { border-color: rgba(78, 201, 176, .45); background: var(--teal-soft); color: #d7f4ee; }
+    .mock-shell { border: 1px solid #3a4148; border-radius: 13px; overflow: hidden; background: var(--terminal); box-shadow: var(--shadow); }
+    .mock-titlebar { height: 28px; display: flex; align-items: center; justify-content: center; background: #e7e7e7; color: #292929; font-size: 10px; font-weight: 650; }
+    .mock-appbar { height: 47px; display: flex; align-items: center; gap: 12px; padding: 0 13px; border-bottom: 1px solid #3e3e42; background: var(--chrome); }
+    .mock-home { width: 26px; height: 26px; display: grid; place-items: center; color: #c7c7c7; }
+    .mock-path { flex: 1; min-width: 0; color: #858585; font: 10px "SFMono-Regular", Consolas, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mock-path b { color: var(--teal); font-weight: 500; }
+    .mock-icon { width: 27px; height: 27px; display: grid; place-items: center; border: 1px solid #3e3e42; border-radius: 4px; color: #c8c8c8; font-size: 13px; }
+    .mock-body { display: grid; grid-template-columns: 118px minmax(0, 1fr); height: 515px; }
+    .mock-sidebar { padding: 10px 7px; border-right: 1px solid #3e3e42; background: var(--chrome); }
+    .mock-sidebar small { color: #858585; font-size: 7px; font-weight: 800; letter-spacing: .1em; }
+    .mock-select { margin: 6px 0 14px; padding: 6px; border-radius: 3px; background: #efefef; color: #555; font-size: 8px; }
+    .mock-resource { margin: 3px 0; padding: 6px 7px; border-radius: 3px; color: #d6d6d6; font-size: 8px; }
+    .mock-resource.active { background: #0e639c; color: white; }
+    .mock-main { min-width: 0; display: grid; grid-template-rows: minmax(0, 1fr) 130px; background: var(--terminal); }
+    .pane-workspace { --split-x: 56%; --split-y: 50%; position: relative; min-height: 0; overflow: hidden; }
+    .panes { position: absolute; inset: 0; display: grid; min-width: 0; min-height: 0; background: #121314; }
+    .panes.demo { grid-template-columns: var(--split-x) 8px minmax(0, 1fr); grid-template-rows: var(--split-y) 8px minmax(0, 1fr); }
+    .panes.right { grid-template-columns: var(--split-x) 8px minmax(0, 1fr); grid-template-rows: 1fr; }
+    .panes.down { grid-template-columns: 1fr; grid-template-rows: var(--split-y) 8px minmax(0, 1fr); }
+    .panes.single { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+    .pane { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--terminal); outline: 1px solid #34383d; outline-offset: -1px; }
+    .pane.active { z-index: 2; outline: 2px solid var(--teal); outline-offset: -2px; }
+    .pane-header { height: 31px; display: flex; align-items: center; gap: 8px; padding: 0 9px; border-bottom: 1px solid #373a3e; background: #252526; color: #a5a5a5; font-size: 9px; user-select: none; cursor: default; }
+    .pane.active .pane-header { background: #292b2b; color: #efefef; }
+    .pane-label { max-width: 125px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .focused { color: var(--teal); font-size: 7px; font-weight: 800; letter-spacing: .08em; }
+    .pane-plus { color: #9a9a9a; font-size: 13px; }
+    .pane-more { margin-left: auto; color: #888; letter-spacing: 1px; }
+    .terminal-copy { padding: 13px; color: #d4d4d4; font: 9px/1.62 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; }
+    .terminal-copy .prompt { color: #23d18b; }
+    .terminal-copy .muted { color: #70777d; }
+    .terminal-copy .warn { color: #dcdcaa; }
+    .pane-1 { grid-column: 1; grid-row: 1 / 4; }
+    .pane-2 { grid-column: 3; grid-row: 1; }
+    .pane-3 { grid-column: 3; grid-row: 3; }
+    .panes.right .pane-1 { grid-column: 1; grid-row: 1; }
+    .panes.right .pane-2 { grid-column: 3; grid-row: 1; }
+    .panes.down .pane-1 { grid-column: 1; grid-row: 1; }
+    .panes.down .pane-2 { grid-column: 1; grid-row: 3; }
+    .panes.single .pane-1 { grid-column: 1; grid-row: 1; }
+    .panes:not(.demo) .pane-3, .panes.single .pane-2 { display: none; }
+    .splitter { z-index: 4; display: grid; place-items: center; background: #2f3235; touch-action: none; }
+    .splitter:hover, .splitter.dragging { background: rgba(78, 201, 176, .38); }
+    .splitter::after { content: ""; border-radius: 99px; background: #71777c; }
+    .splitter-v { grid-column: 2; grid-row: 1 / 4; cursor: col-resize; }
+    .splitter-v::after { width: 2px; height: 24px; }
+    .splitter-h { grid-column: 3; grid-row: 2; cursor: row-resize; }
+    .splitter-h::after { width: 24px; height: 2px; }
+    .panes.right .splitter-v { grid-column: 2; grid-row: 1; }
+    .panes.right .splitter-h, .panes.down .splitter-v, .panes.single .splitter { display: none; }
+    .panes.down .splitter-h { display: grid; grid-column: 1; grid-row: 2; }
+    .panes.zoomed .pane:not(.active), .panes.zoomed .splitter { display: none; }
+    .panes.zoomed { display: block; }
+    .panes.zoomed .pane.active { position: absolute; inset: 0; display: block; }
+    .resource-panel { border-top: 1px solid #3e3e42; background: #252526; overflow: hidden; }
+    .resource-head { height: 31px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border-bottom: 1px solid #3e3e42; color: #ccc; font-size: 8px; font-weight: 750; }
+    .resource-head span { color: #858585; font-weight: 500; }
+    .resource-search { flex: 1; height: 20px; padding: 4px 7px; border-radius: 3px; background: #383838; color: #8f8f8f; font-weight: 400; }
+    .resource-row { display: grid; grid-template-columns: 1.2fr 2fr .7fr .7fr; padding: 6px 10px; border-bottom: 1px solid rgba(62, 62, 66, .6); color: #bbb; font-size: 7px; }
+    .pane-menu { position: fixed; z-index: 30; width: 174px; padding: 5px; border: 1px solid #474c51; border-radius: 7px; background: #2d2d30; box-shadow: 0 15px 35px rgba(0, 0, 0, .45); }
+    .pane-menu[hidden] { display: none; }
+    .menu-item { width: 100%; display: grid; grid-template-columns: 20px 1fr; gap: 5px; align-items: center; padding: 7px 8px; border: 0; border-radius: 4px; background: transparent; color: #e2e2e2; text-align: left; cursor: pointer; font-size: 11px; }
+    .menu-item:hover { background: #094771; }
+    .menu-item.danger { color: var(--red); }
+    .menu-item:disabled { color: #737373; cursor: not-allowed; background: transparent; }
+    .menu-separator { height: 1px; margin: 4px 7px; background: #494949; }
+    .mock-caption { margin-top: 12px; color: var(--muted); font-size: 12px; }
+
+    .architecture { display: grid; grid-template-columns: 1fr 58px 1.2fr 58px 1fr; align-items: stretch; }
+    .arch-column { display: grid; gap: 9px; }
+    .arch-box { padding: 15px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+    .arch-box strong, .arch-box span { display: block; }
+    .arch-box strong { font-size: 12px; }
+    .arch-box span { color: var(--muted); font-size: 10px; }
+    .arch-core { border-color: rgba(78, 201, 176, .35); background: var(--teal-soft); }
+    .arch-arrow { display: grid; place-items: center; color: var(--teal); font-size: 22px; }
+
+    .state-table { width: 100%; border-collapse: collapse; border: 1px solid var(--line-soft); background: var(--panel); font-size: 12px; }
+    .state-table th, .state-table td { padding: 12px 13px; border-bottom: 1px solid var(--line-soft); text-align: left; vertical-align: top; }
+    .state-table th { color: var(--subtle); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+    .state-table td { color: var(--muted); }
+    .state-table td:first-child { color: var(--text); font-family: monospace; }
+    pre { margin: 12px 0; padding: 15px; overflow: auto; border: 1px solid #30363c; border-radius: 8px; background: #101214; color: #cdd6dc; font-size: 11px; line-height: 1.55; }
+
+    details.task { margin-bottom: 10px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--panel); overflow: hidden; }
+    details.task[open] { border-color: #3b434a; }
+    details.task summary { display: flex; gap: 14px; align-items: center; padding: 16px 18px; cursor: pointer; list-style: none; }
+    details.task summary::-webkit-details-marker { display: none; }
+    .task-no { flex: 0 0 auto; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: var(--teal-soft); color: var(--teal); font: 750 11px monospace; }
+    .task-summary b, .task-summary span { display: block; }
+    .task-summary b { font-size: 13px; }
+    .task-summary span { color: var(--muted); font-size: 10px; }
+    .task-body { padding: 0 18px 20px 60px; color: var(--muted); font-size: 12px; }
+    .file-list { padding: 11px 13px; border-radius: 7px; background: #121416; color: #afbac1; }
+    .steps { margin: 12px 0 0; padding-left: 18px; }
+    .steps li + li { margin-top: 7px; }
+    .command { color: #d9fff6; }
+    .checklist { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px 18px; padding: 0; list-style: none; }
+    .checklist li { position: relative; padding: 11px 12px 11px 38px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--panel); color: var(--muted); font-size: 12px; }
+    .checklist li::before { content: "✓"; position: absolute; left: 13px; top: 10px; color: var(--teal); font-weight: 800; }
+    .risk { border-left: 3px solid var(--red); }
+    footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line-soft); color: var(--subtle); font-size: 11px; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line-soft); }
+      .nav { grid-template-columns: repeat(3, 1fr); }
+      .nav-label, .decision-chip { display: none; }
+      main { padding-top: 38px; }
+      .grid-3 { grid-template-columns: 1fr 1fr; }
+      .architecture { grid-template-columns: 1fr; gap: 8px; }
+      .arch-arrow { transform: rotate(90deg); }
+    }
+    @media (max-width: 650px) {
+      .section-head { grid-template-columns: 1fr; gap: 5px; }
+      .grid-2, .grid-3, .checklist { grid-template-columns: 1fr; }
+      .mock-body { grid-template-columns: 76px minmax(0, 1fr); height: 480px; }
+      .mock-sidebar { overflow: hidden; }
+      .mock-path { display: none; }
+      .pane-header { padding-inline: 6px; }
+      .terminal-copy { font-size: 7px; padding: 9px; }
+      .task-body { padding-left: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">⌘</div>
+        <div><strong>KubeCLI</strong><span>Pane workspace brief</span></div>
+      </div>
+      <div class="nav-label">Plan</div>
+      <nav class="nav" aria-label="Plan sections">
+        <a href="#decision">Decision</a>
+        <a href="#prototype">Prototype</a>
+        <a href="#behavior">Behavior</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#state">State model</a>
+        <a href="#tasks">Build tasks</a>
+        <a href="#tests">Test matrix</a>
+        <a href="#acceptance">Acceptance</a>
+      </nav>
+      <div class="decision-chip"><strong>Recommended</strong>Recursive split tree with tab groups at each leaf and one focused pane for all active commands.</div>
+    </aside>
+
+    <main>
+      <div class="content">
+        <div class="eyebrow">Implementation plan · 17 Aug 2026</div>
+        <h1>From terminal tabs to a focused pane workspace.</h1>
+        <p class="lede">Add right-click pane actions, horizontal and vertical splits, drag resizing, zoom/restore, and an unambiguous active-pane state—while keeping KubeCLI’s current terminals and resource panel stable.</p>
+        <div class="meta">
+          <span class="pill good">Ready for implementation</span>
+          <span class="pill">React 19 + TypeScript</span>
+          <span class="pill">Tauri 2 + xterm.js</span>
+          <span class="pill">No new runtime dependency</span>
+        </div>
+
+        <section id="decision">
+          <div class="section-head">
+            <div class="section-no">01 / DECISION</div>
+            <div><h2>Use a pane tree, not a larger tab array.</h2><p class="section-intro">Tabs and panes solve different jobs. A pane is a visible region; each pane owns a local tab group. A recursive tree expresses any split arrangement, and one focused leaf drives commands, resource-panel state, and keyboard shortcuts.</p></div>
+          </div>
+          <div class="grid-3">
+            <article class="card"><h3>Recommended: split tree</h3><p>Each split node stores direction and ratio; each leaf stores its tab IDs and active tab. Supports arbitrary nesting, resize, zoom, and close without position-specific state.</p></article>
+            <article class="card"><h3>Rejected: fixed 2×2 grid</h3><p>Simple initially, but cannot represent nested layouts cleanly. Empty grid cells and special-case resizing create poor DX and brittle state transitions.</p></article>
+            <article class="card"><h3>Rejected: one tab per pane</h3><p>Splitting would replace rather than complement tabs. Users would lose the lightweight tab workflow they already know, and tab-to-pane migration would be harder later.</p></article>
+          </div>
+          <div class="callout teal" style="margin-top:14px"><strong>Scope boundary:</strong> this plan includes local tabs, splitting, focus, zoom, resize, and closing. Dragging tabs between panes and persisting layouts across app launches are intentionally deferred.</div>
+        </section>
+
+        <section id="prototype">
+          <div class="section-head">
+            <div class="section-no">02 / PROTOTYPE</div>
+            <div><h2>The target interaction, in the current visual language.</h2><p class="section-intro">Click any pane to focus it. Right-click a pane to open its menu. Drag either divider. Use the controls to inspect the principal states.</p></div>
+          </div>
+
+          <div class="prototype-tools" aria-label="Prototype states">
+            <button class="state-btn" data-layout="single">Single pane</button>
+            <button class="state-btn" data-layout="right">Split right</button>
+            <button class="state-btn" data-layout="down">Split down</button>
+            <button class="state-btn active" data-layout="demo">Nested demo</button>
+            <button class="state-btn" id="zoomButton">Zoom active pane</button>
+            <button class="state-btn" id="menuButton">Open pane menu</button>
+          </div>
+
+          <div class="mock-shell">
+            <div class="mock-titlebar">KubeCLI — production-west (/home/dev/.kube/config)</div>
+            <div class="mock-appbar">
+              <div class="mock-home">⌂</div>
+              <div class="mock-path">Config: <b>/home/dev/.kube/config</b></div>
+              <div class="mock-icon">↻</div><div class="mock-icon">⊞</div>
+            </div>
+            <div class="mock-body">
+              <aside class="mock-sidebar">
+                <small>CONTEXT</small><div class="mock-select">production-west</div>
+                <small>RESOURCES</small>
+                <div class="mock-resource active">⬢ &nbsp;Pods</div><div class="mock-resource">↗ &nbsp;Deployments</div><div class="mock-resource">◉ &nbsp;CronJobs</div><div class="mock-resource">◎ &nbsp;Services</div><div class="mock-resource">▤ &nbsp;ConfigMaps</div><div class="mock-resource">▣ &nbsp;Secrets</div>
+              </aside>
+              <div class="mock-main">
+                <div class="pane-workspace" id="paneWorkspace">
+                  <div class="panes demo" id="panes">
+                    <article class="pane pane-1 active" data-pane="api-logs" tabindex="0">
+                      <div class="pane-header"><span class="pane-label">api-logs</span><span class="focused">FOCUSED</span><span class="pane-plus">＋</span><span class="pane-more">⋮</span></div>
+                      <div class="terminal-copy"><span class="prompt">dev@kubecli ~</span>
+$ kubectl -n brand logs api-7c4f9 --tail=200 -f
+Defaulted container "api" out of: api, init
+<span class="muted">{"level":"INFO","message":"Starting up"}</span>
+<span class="warn">{"level":"WARN","message":"No XML encryptor configured"}</span>
+<span class="prompt">█</span></div>
+                    </article>
+                    <div class="splitter splitter-v" data-splitter="vertical" title="Drag to resize"></div>
+                    <article class="pane pane-2" data-pane="shell" tabindex="0">
+                      <div class="pane-header"><span class="pane-label">shell</span><span class="focused" hidden>FOCUSED</span><span class="pane-plus">＋</span><span class="pane-more">⋮</span></div>
+                      <div class="terminal-copy"><span class="prompt">dev@kubecli ~</span>
+$ kubectl get nodes
+NAME     STATUS   VERSION
+node-1   Ready    v1.31.1
+node-2   Ready    v1.31.1
+<span class="prompt">$ █</span></div>
+                    </article>
+                    <div class="splitter splitter-h" data-splitter="horizontal" title="Drag to resize"></div>
+                    <article class="pane pane-3" data-pane="worker-logs" tabindex="0">
+                      <div class="pane-header"><span class="pane-label">worker-logs</span><span class="focused" hidden>FOCUSED</span><span class="pane-plus">＋</span><span class="pane-more">⋮</span></div>
+                      <div class="terminal-copy"><span class="prompt">dev@kubecli ~</span>
+$ kubectl -n brand logs worker --tail=200 -f
+<span class="muted">{"level":"INFO","msg":"Worker starting"}</span>
+<span class="muted">{"level":"INFO","msg":"Connected to broker"}</span>
+<span class="prompt">█</span></div>
+                    </article>
+                  </div>
+                </div>
+                <div class="resource-panel">
+                  <div class="resource-head">PODS <span>All</span><div class="resource-search">Search pods…</div> ↻ &nbsp;×</div>
+                  <div class="resource-row"><span>brand</span><span>api-7c4f9</span><span>1/1</span><span>Running</span></div>
+                  <div class="resource-row"><span>brand</span><span>worker-86bd8</span><span>1/1</span><span>Running</span></div>
+                  <div class="resource-row"><span>brand</span><span>gateway-5f6d2</span><span>1/1</span><span>Running</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-menu" id="paneMenu" role="menu" hidden>
+            <button class="menu-item" data-action="zoom"><span>⛶</span><span>Zoom Pane</span></button>
+            <button class="menu-item" data-action="right"><span>◫</span><span>Split Right</span></button>
+            <button class="menu-item" data-action="down"><span>⊟</span><span>Split Down</span></button>
+            <div class="menu-separator"></div>
+            <button class="menu-item danger" data-action="close"><span>×</span><span>Close Pane</span></button>
+          </div>
+          <p class="mock-caption">The teal focus treatment is an inset outline, so activation never shifts layout. The shared resource panel remains outside the pane tree and always reflects the active tab in the focused pane.</p>
+        </section>
+
+        <section id="behavior">
+          <div class="section-head">
+            <div class="section-no">03 / BEHAVIOR</div>
+            <div><h2>One focus contract across every interaction.</h2><p class="section-intro">A user should never wonder where the next command will run. Pane focus is updated before tab actions, context-menu actions, resource actions, or terminal input are dispatched.</p></div>
+          </div>
+          <div class="grid-2">
+            <article class="card"><h3>Focus and highlight</h3><ul class="plain-list"><li>Pointer-down in a pane, its header, or its local tab activates that pane.</li><li>The active pane gets a 2px inset teal outline and brighter header; its local active tab remains visually selected.</li><li>Only the active pane carries <code>aria-current="true"</code> and the visible <code>FOCUSED</code> label.</li><li>Resource actions snapshot the focused pane’s active tab ID before sending a command.</li></ul></article>
+            <article class="card"><h3>Split and close</h3><ul class="plain-list"><li><strong>Split Right</strong> replaces the focused leaf with a row split; <strong>Split Down</strong> uses a column split.</li><li>The existing leaf stays first. A fresh terminal tab is created in the second leaf at a 50/50 ratio and receives focus.</li><li>Closing a pane disposes all PTYs in that leaf, promotes its sibling, normalizes the tree, and focuses the nearest surviving leaf.</li><li>Close is disabled when only one pane remains.</li></ul></article>
+            <article class="card"><h3>Resize</h3><ul class="plain-list"><li>Divider visual thickness is 1px; pointer hit target is 8px.</li><li>Use pointer capture so drag continues outside the divider.</li><li>Clamp ratios using a 240px minimum width and 120px minimum height per leaf.</li><li>Commit ratio on pointer-up; xterm’s existing <code>ResizeObserver</code> performs fit and backend resize.</li></ul></article>
+            <article class="card"><h3>Zoom and restore</h3><ul class="plain-list"><li>Zoom stores only <code>zoomedPaneId</code>; it does not mutate the layout tree or ratios.</li><li>Siblings and splitters are hidden; the resource panel remains visible below the workspace.</li><li>The menu label becomes <strong>Restore Pane</strong>; repeating the action restores the exact previous layout.</li><li>Closing or removing the zoomed pane clears zoom before normalizing.</li></ul></article>
+          </div>
+          <div class="callout" style="margin-top:14px"><strong>Existing right-click conflict:</strong> <code>Terminal.tsx</code> currently creates a Copy/Paste menu imperatively inside xterm. Replace it with one React menu: terminal-specific actions first, a separator, then pane actions. Right-clicking always focuses the target pane before the menu opens.</div>
+        </section>
+
+        <section id="architecture">
+          <div class="section-head">
+            <div class="section-no">04 / ARCHITECTURE</div>
+            <div><h2>Pure state transitions, recursive rendering, existing PTYs.</h2><p class="section-intro">Keep layout behavior testable without rendering xterm. The UI recursively renders the tree; terminal instances stay keyed by tab ID and mounted while their tab exists.</p></div>
+          </div>
+          <div class="architecture">
+            <div class="arch-column">
+              <div class="arch-box"><strong>PaneHeader / local TabBar</strong><span>focus, add, activate, close, context-menu target</span></div>
+              <div class="arch-box"><strong>SplitHandle</strong><span>pointer capture and clamped ratio updates</span></div>
+              <div class="arch-box"><strong>Terminal + ResourcePanel</strong><span>PTY view and active-tab panel state</span></div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-column">
+              <div class="arch-box arch-core"><strong>useWorkspaceLayout reducer</strong><span>single authoritative workspace state and typed commands</span></div>
+              <div class="arch-box arch-core"><strong>layoutModel pure helpers</strong><span>find, replace, split, resize, normalize, validate</span></div>
+              <div class="arch-box arch-core"><strong>Focused target selector</strong><span>activePane → leaf.activeTabId → Tab record</span></div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-column">
+              <div class="arch-box"><strong>xterm lifecycle</strong><span>existing Terminal instances keyed by stable tab IDs</span></div>
+              <div class="arch-box"><strong>Tauri terminal API</strong><span>create, write, resize, close remain unchanged</span></div>
+              <div class="arch-box"><strong>Resource actions</strong><span>dispatch to a captured target tab, never ambient focus</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="state">
+          <div class="section-head">
+            <div class="section-no">05 / STATE MODEL</div>
+            <div><h2>A small discriminated union covers the workspace.</h2><p class="section-intro">Tabs remain normalized records because terminal lifetime and panel state belong to a tab. Layout leaves reference those records.</p></div>
+          </div>
+          <pre><code>type PaneId = string;
+type TabId = string;
+
+type LayoutNode =
+  | { kind: 'leaf'; id: PaneId; tabIds: TabId[]; activeTabId: TabId }
+  | {
+      kind: 'split';
+      id: string;
+      direction: 'row' | 'column';
+      ratio: number;          // first child share, clamped by rendered size
+      first: LayoutNode;
+      second: LayoutNode;
+    };
+
+interface WorkspaceState {
+  root: LayoutNode;
+  tabs: Record&lt;TabId, Tab&gt;;
+  activePaneId: PaneId;
+  zoomedPaneId: PaneId | null;
+}</code></pre>
+          <table class="state-table">
+            <thead><tr><th>Invariant</th><th>Enforcement</th><th>Why it matters</th></tr></thead>
+            <tbody>
+              <tr><td>root has ≥ 1 leaf</td><td>Final pane cannot close.</td><td>The app always has a valid command target.</td></tr>
+              <tr><td>leaf has ≥ 1 tab</td><td>Closing the final local tab closes its pane, unless it is the final pane.</td><td>No empty terminal regions or null active-tab branches.</td></tr>
+              <tr><td>tab referenced once</td><td>Reducer owns all tab placement mutations.</td><td>A PTY cannot render in two panes.</td></tr>
+              <tr><td>active IDs exist</td><td>Every mutation returns focus through <code>nearestLeaf()</code>.</td><td>Commands never fall back silently to the wrong terminal.</td></tr>
+              <tr><td>ratio ∈ safe range</td><td>Resize uses container size and leaf minimums to clamp.</td><td>No pane can be dragged to zero size.</td></tr>
+              <tr><td>zoom references a leaf</td><td>Normalize clears invalid zoom IDs.</td><td>Zoom can always restore cleanly.</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="tasks">
+          <div class="section-head">
+            <div class="section-no">06 / BUILD TASKS</div>
+            <div><h2>Implement in test-first, reviewable slices.</h2><p class="section-intro">Each task leaves the branch in a coherent state. Run the focused test first, then the complete frontend suite before committing.</p></div>
+          </div>
+
+          <details class="task" open>
+            <summary><span class="task-no">01</span><span class="task-summary"><b>Build the pure layout model</b><span>Tree operations and invariants, independent of React.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/workspace/layoutModel.ts</code><br><strong>Test:</strong> <code>src/workspace/layoutModel.test.ts</code></div>
+              <ol class="steps"><li>Write failing tests for split-right, split-down, focus, resize ratio, zoom/restore, close, sibling promotion, and nested-tree normalization.</li><li>Implement <code>findLeaf</code>, <code>replaceNode</code>, <code>splitLeaf</code>, <code>resizeSplit</code>, <code>removeLeaf</code>, <code>nearestLeaf</code>, and <code>validateWorkspace</code>.</li><li>Use deterministic ID factories injected by tests; production may use the existing counter pattern.</li><li>Run <code class="command">npm test -- src/workspace/layoutModel.test.ts</code>; expect all model tests to pass.</li></ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">02</span><span class="task-summary"><b>Replace useTabs with workspace state</b><span>Local tab groups plus one focused pane.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/hooks/useWorkspaceLayout.ts</code><br><strong>Test:</strong> <code>src/hooks/useWorkspaceLayout.test.tsx</code><br><strong>Retire after integration:</strong> <code>src/hooks/useTabs.ts</code></div>
+              <ol class="steps"><li>Write reducer tests for add/activate/close tab in the focused pane and for every layout command.</li><li>Preserve the existing <code>Tab</code> and <code>PanelState</code> shapes; move them to <code>src/workspace/types.ts</code>.</li><li>Expose derived selectors: <code>activePane</code>, <code>activeTab</code>, <code>visibleTabIds</code>, and <code>paneCount</code>.</li><li>Enforce “never zero panes/tabs” in the reducer, replacing the special <code>id === 'default'</code> close rule.</li><li>Run <code class="command">npm test -- src/hooks/useWorkspaceLayout.test.tsx</code>.</li></ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">03</span><span class="task-summary"><b>Render recursive panes and local tab bars</b><span>Focus treatment and stable terminal mounting.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/components/workspace/PaneWorkspace.tsx</code>, <code>PaneNode.tsx</code>, <code>PaneHeader.tsx</code>, <code>workspace.css</code><br><strong>Modify:</strong> <code>src/components/tabs/TabBar.tsx</code><br><strong>Test:</strong> <code>src/components/workspace/PaneWorkspace.test.tsx</code></div>
+              <ol class="steps"><li>Write tests proving pointer-down and tab activation focus the correct pane, only one pane is highlighted, and each leaf renders only its own tabs.</li><li>Recursively render split nodes with CSS grid and leaf nodes with a local <code>TabBar</code>.</li><li>Keep every tab’s <code>Terminal</code> mounted while the tab exists; hide inactive tabs inside their owning leaf so PTYs are not recreated.</li><li>Add inset teal focus outline, brighter header, visible <code>FOCUSED</code> text, <code>aria-current</code>, and keyboard-focus styles.</li></ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">04</span><span class="task-summary"><b>Add pointer-based split resizing</b><span>Fast, clamped, and compatible with xterm fitting.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/components/workspace/SplitHandle.tsx</code><br><strong>Test:</strong> <code>src/components/workspace/SplitHandle.test.tsx</code></div>
+              <ol class="steps"><li>Write pointer-event tests for row/column ratios, pointer capture, min-size clamps, and pointer-up cleanup.</li><li>Render an 8px hit target with a subtle 1px visible divider and correct resize cursor.</li><li>Update a local preview ratio through <code>requestAnimationFrame</code>; commit one reducer action on pointer-up.</li><li>Verify existing <code>Terminal.tsx</code> <code>ResizeObserver</code> fits xterm and calls backend resize when the pane changes size.</li></ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">05</span><span class="task-summary"><b>Unify right-click menus and add zoom</b><span>Preserve Copy/Paste while adding pane actions.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/components/workspace/PaneContextMenu.tsx</code><br><strong>Modify:</strong> <code>src/components/Terminal.tsx</code><br><strong>Test:</strong> <code>src/components/workspace/PaneContextMenu.test.tsx</code>, <code>src/components/Terminal.test.tsx</code></div>
+              <ol class="steps"><li>Write tests for viewport clamping, outside-click/Escape close, disabled final-pane close, and Zoom ↔ Restore label changes.</li><li>Replace the imperative DOM menu in <code>Terminal.tsx:293</code> with a callback that reports coordinates and current selection state.</li><li>Render Copy, Paste, and Clear Selection when the event comes from xterm; add a separator followed by Zoom/Restore, Split Right, Split Down, and Close Pane.</li><li>Focus the target pane before opening the menu, then return focus to its xterm after an action.</li></ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">06</span><span class="task-summary"><b>Integrate active-pane command routing</b><span>Resource actions and shortcuts target the right PTY.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Modify:</strong> <code>src/components/screens/TerminalScreen.tsx</code><br><strong>Test:</strong> <code>src/components/screens/TerminalScreen.test.tsx</code></div>
+              <ol class="steps"><li>Replace the global tab bar/terminal wrapper at <code>TerminalScreen.tsx:360</code> with <code>PaneWorkspace</code>.</li><li>Change <code>Ctrl/Cmd+T</code>, <code>Ctrl/Cmd+W</code>, and <code>Ctrl+Tab</code> to operate only on the focused pane’s local tabs.</li><li>Keep the resource panel outside the tree and derive its state from the focused pane’s active tab.</li><li>Capture <code>targetTabId</code> in <code>handleResourceAction</code> so a later focus change cannot redirect a pending command.</li><li>Keep environment updates flowing to all mounted terminals exactly as today.</li></ol>
+            </div>
+          </details>
+
+          <details class="task">
+            <summary><span class="task-no">07</span><span class="task-summary"><b>Screenshot fixture, regression pass, and documentation</b><span>Prove lifecycle, keyboard, and visual behavior with deterministic evidence.</span></span></summary>
+            <div class="task-body">
+              <div class="file-list"><strong>Create:</strong> <code>src/test/fixtures/paneWorkspace.ts</code>, <code>docs/screenshots/pane-workspace-*.png</code><br><strong>Modify:</strong> <code>README.md</code><br><strong>Verify:</strong> full frontend suite, deterministic screenshot cases, and a Tauri smoke test</div>
+              <ol class="steps"><li>Encode the exact fake fixture below in <code>src/test/fixtures/paneWorkspace.ts</code>; screenshot rendering must not call Tauri, the shell, Kubernetes, auth, timers, or network APIs.</li><li>Capture the named visual cases below at 1440×900, device scale factor 1, dark theme, reduced motion, and a frozen clock.</li><li>Run <code class="command">npm run typecheck</code> and <code class="command">npm run test:run</code>.</li><li>Run <code class="command">npm run build:frontend</code> and confirm no bundle errors.</li><li>Start <code class="command">npm run dev</code>; manually exercise the acceptance checklist below using real PTYs.</li><li>Document right-click actions, local-tab shortcuts, zoom, divider resizing, and the screenshot refresh procedure in <code>README.md</code>.</li></ol>
+            </div>
+          </details>
+        </section>
+
+        <section id="tests">
+          <div class="section-head">
+            <div class="section-no">07 / TEST MATRIX</div>
+            <div><h2>Test state rules separately from PTY behavior.</h2><p class="section-intro">Most edge cases belong in fast pure tests. Component tests cover event routing; one manual Tauri pass covers real terminal resize and focus.</p></div>
+          </div>
+          <table class="state-table">
+            <thead><tr><th>Layer</th><th>Must prove</th><th>Evidence</th></tr></thead>
+            <tbody>
+              <tr><td>layoutModel</td><td>All split directions, nested replacement, ratio update, close normalization, focus fallback, zoom validity, invariants after every action.</td><td><code>layoutModel.test.ts</code></td></tr>
+              <tr><td>Hook/reducer</td><td>Tabs stay local to leaves; active selectors are correct; closing never produces zero panes or duplicate tab references.</td><td><code>useWorkspaceLayout.test.tsx</code></td></tr>
+              <tr><td>Workspace UI</td><td>Click/right-click focus, active outline, local tab operations, zoom visibility, splitter pointer behavior.</td><td>Testing Library component tests</td></tr>
+              <tr><td>Terminal menu</td><td>Copy/Paste/Clear Selection remain available and pane actions route to the context-clicked pane.</td><td>Expanded <code>Terminal.test.tsx</code></td></tr>
+              <tr><td>Integration</td><td>A resource action runs in the snapshotted active tab even if focus changes before pending command render.</td><td><code>TerminalScreen.test.tsx</code></td></tr>
+              <tr><td>Real app</td><td>PTY survives split resizing, zoom/restore, tab changes, and context/environment refresh without recreation or lost input.</td><td>Tauri manual smoke checklist</td></tr>
+            </tbody>
+          </table>
+
+          <h3 style="margin-top:28px">Deterministic screenshot fixture</h3>
+          <p class="section-intro">Use these exact fake values for visual evidence. They match the embedded prototype above and contain no real cluster names, credentials, filesystem secrets, or live command output.</p>
+          <pre><code>export const paneWorkspaceFixture = {
+  now: '2026-08-17T09:30:00.000Z',
+  viewport: { width: 1440, height: 900, deviceScaleFactor: 1 },
+  kubeconfigPath: '/fixtures/kube/config',
+  context: 'production-west',
+  namespace: 'brand',
+  activePaneId: 'pane-api',
+  zoomedPaneId: null,
+  layout: {
+    kind: 'split', direction: 'row', ratio: 0.56,
+    first: { kind: 'leaf', id: 'pane-api', tabIds: ['tab-api'], activeTabId: 'tab-api' },
+    second: {
+      kind: 'split', direction: 'column', ratio: 0.50,
+      first: { kind: 'leaf', id: 'pane-shell', tabIds: ['tab-shell'], activeTabId: 'tab-shell' },
+      second: { kind: 'leaf', id: 'pane-worker', tabIds: ['tab-worker'], activeTabId: 'tab-worker' }
+    }
+  },
+  tabs: {
+    'tab-api': { label: 'api-logs', lines: [
+      '$ kubectl -n brand logs api-7c4f9 --tail=200 -f',
+      'Defaulted container "api" out of: api, init',
+      '{"level":"INFO","message":"Starting up"}',
+      '{"level":"WARN","message":"No XML encryptor configured"}'
+    ]},
+    'tab-shell': { label: 'shell', lines: [
+      '$ kubectl get nodes', 'NAME     STATUS   VERSION',
+      'node-1   Ready    v1.31.1', 'node-2   Ready    v1.31.1'
+    ]},
+    'tab-worker': { label: 'worker-logs', lines: [
+      '$ kubectl -n brand logs worker --tail=200 -f',
+      '{"level":"INFO","msg":"Worker starting"}',
+      '{"level":"INFO","msg":"Connected to broker"}'
+    ]}
+  },
+  resources: [
+    { namespace: 'brand', name: 'api-7c4f9', ready: '1/1', status: 'Running' },
+    { namespace: 'brand', name: 'worker-86bd8', ready: '1/1', status: 'Running' },
+    { namespace: 'brand', name: 'gateway-5f6d2', ready: '1/1', status: 'Running' }
+  ]
+} as const;</code></pre>
+
+          <h3 style="margin-top:28px">Screenshot test cases</h3>
+          <table class="state-table">
+            <thead><tr><th>Case / baseline</th><th>Setup and action</th><th>Visual assertions</th></tr></thead>
+            <tbody>
+              <tr><td>pane-workspace-nested.png</td><td>Load the fixture without interaction.</td><td>Three panes render at 56/44 and 50/50; only <code>pane-api</code> has the teal inset outline and FOCUSED label.</td></tr>
+              <tr><td>pane-workspace-menu.png</td><td>Right-click the inactive <code>pane-shell</code> body at a stable coordinate.</td><td>Focus moves to shell before the menu opens; menu shows Zoom Pane, Split Right, Split Down, and Close Pane fully inside the viewport.</td></tr>
+              <tr><td>pane-workspace-split-right.png</td><td>Start from one pane and choose Split Right.</td><td>Two equal-width live-terminal placeholders render; the new right pane is active and the resource panel remains shared below.</td></tr>
+              <tr><td>pane-workspace-split-down.png</td><td>Start from one pane and choose Split Down.</td><td>Two equal-height panes render; the new lower pane is active with a horizontal resize cursor between them.</td></tr>
+              <tr><td>pane-workspace-resized.png</td><td>Drag the vertical handle from 56% to 44%.</td><td>The ratio changes without content overlap, both leaves remain above minimum width, and exactly one pane remains focused.</td></tr>
+              <tr><td>pane-workspace-zoomed.png</td><td>Focus shell and choose Zoom Pane.</td><td>Shell occupies the full workspace above the resource panel; sibling terminals and splitters are absent; the menu action reads Restore Pane.</td></tr>
+              <tr><td>pane-workspace-restored.png</td><td>Choose Restore Pane after the zoomed case.</td><td>The original three-pane tree and exact 56/44, 50/50 ratios return with shell still focused.</td></tr>
+              <tr><td>pane-workspace-min-size.png</td><td>Drag each handle past its legal boundary.</td><td>Widths clamp at 240px and heights at 120px; no pane collapses, clips its header controls, or steals focus.</td></tr>
+            </tbody>
+          </table>
+          <div class="callout teal" style="margin-top:14px"><strong>Screenshot stability:</strong> disable CSS transitions and cursor blinking, hide RAM/memory telemetry, freeze <code>Date</code>, use the bundled fixture only, wait for fonts, and capture after two animation frames. A baseline changes only when the product design intentionally changes.</div>
+        </section>
+
+        <section id="acceptance">
+          <div class="section-head">
+            <div class="section-no">08 / ACCEPTANCE</div>
+            <div><h2>Definition of done.</h2><p class="section-intro">The feature is complete only when every interaction below is observable in a real application window and the automated gates pass.</p></div>
+          </div>
+          <ul class="checklist">
+            <li>Right-clicking any pane focuses it and opens a viewport-safe menu.</li>
+            <li>Menu contains Zoom/Restore, Split Right, Split Down, and Close Pane.</li>
+            <li>Terminal-body menu still provides Copy, Paste, and Clear Selection.</li>
+            <li>Split Right and Split Down create a fresh live PTY at 50/50.</li>
+            <li>Nested splits render correctly with no fixed-grid assumptions.</li>
+            <li>Both divider directions drag smoothly and honor minimum sizes.</li>
+            <li>xterm fits and backend rows/columns update after resize.</li>
+            <li>Exactly one pane has the teal active highlight at any time.</li>
+            <li>Click, tab click, terminal focus, and right-click all update active pane.</li>
+            <li>Resource actions execute in the focused pane’s snapshotted active tab.</li>
+            <li>Zoom hides siblings without destroying layout or ratios.</li>
+            <li>Restore returns to the exact pre-zoom arrangement.</li>
+            <li>Closing a pane disposes its PTYs and promotes its sibling cleanly.</li>
+            <li>The final pane cannot be closed, so the workspace is never empty.</li>
+            <li>Existing local tab add, close, cycle, resource-panel, and auth flows still pass.</li>
+            <li>Typecheck, full Vitest suite, frontend build, and Tauri smoke test pass.</li>
+          </ul>
+          <div class="grid-2" style="margin-top:14px">
+            <article class="card risk"><h3>Risk: too many live terminals</h3><p>Splits make concurrent PTYs easier to create. Keep terminal lifetime tied strictly to tab records, dispose on close, and add no hidden duplicate instances during tree rerenders.</p></article>
+            <article class="card risk"><h3>Risk: wrong command target</h3><p>Ambient <code>activeTabId</code> can change between resource selection and pending-command delivery. Carry the target tab ID with the pending command and assert it in an integration test.</p></article>
+          </div>
+        </section>
+
+        <footer>Plan artifact: <code>docs/plans/2026-08-17-terminal-pane-workspace-plan.html</code> · Designed against the current <code>TerminalScreen</code>, <code>useTabs</code>, <code>TabBar</code>, and <code>Terminal</code> implementations.</footer>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const panes = document.getElementById('panes');
+      const workspace = document.getElementById('paneWorkspace');
+      const menu = document.getElementById('paneMenu');
+      const zoomButton = document.getElementById('zoomButton');
+      const menuButton = document.getElementById('menuButton');
+      const layoutButtons = [...document.querySelectorAll('[data-layout]')];
+      let activePane = document.querySelector('.pane.active');
+
+      const focusPane = (pane) => {
+        if (!pane || pane.offsetParent === null) return;
+        document.querySelectorAll('.pane').forEach((item) => {
+          const isActive = item === pane;
+          item.classList.toggle('active', isActive);
+          item.querySelector('.focused').hidden = !isActive;
+          item.setAttribute('aria-current', isActive ? 'true' : 'false');
+        });
+        activePane = pane;
+      };
+
+      const closeMenu = () => { menu.hidden = true; };
+      const openMenu = (x, y, pane = activePane) => {
+        focusPane(pane);
+        menu.hidden = false;
+        const width = 174;
+        const height = 174;
+        menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - width - 8))}px`;
+        menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
+        menu.querySelector('[data-action="zoom"] span:last-child').textContent = panes.classList.contains('zoomed') ? 'Restore Pane' : 'Zoom Pane';
+      };
+
+      document.querySelectorAll('.pane').forEach((pane) => {
+        pane.addEventListener('pointerdown', () => focusPane(pane));
+        pane.addEventListener('focus', () => focusPane(pane));
+        pane.addEventListener('contextmenu', (event) => {
+          event.preventDefault();
+          openMenu(event.clientX, event.clientY, pane);
+        });
+      });
+
+      const setLayout = (layout) => {
+        panes.className = `panes ${layout}`;
+        const firstVisible = [...document.querySelectorAll('.pane')].find((pane) => pane.offsetParent !== null);
+        focusPane(firstVisible);
+        layoutButtons.forEach((button) => button.classList.toggle('active', button.dataset.layout === layout));
+        zoomButton.textContent = 'Zoom active pane';
+        closeMenu();
+      };
+      layoutButtons.forEach((button) => button.addEventListener('click', () => setLayout(button.dataset.layout)));
+
+      const toggleZoom = () => {
+        panes.classList.toggle('zoomed');
+        const zoomed = panes.classList.contains('zoomed');
+        zoomButton.textContent = zoomed ? 'Restore workspace' : 'Zoom active pane';
+        closeMenu();
+      };
+      zoomButton.addEventListener('click', toggleZoom);
+      menuButton.addEventListener('click', () => {
+        const rect = activePane.getBoundingClientRect();
+        openMenu(rect.left + Math.min(rect.width - 190, rect.width * .55), rect.top + 45);
+      });
+
+      menu.addEventListener('click', (event) => {
+        const action = event.target.closest('[data-action]')?.dataset.action;
+        if (!action) return;
+        if (action === 'zoom') toggleZoom();
+        if (action === 'right') setLayout('right');
+        if (action === 'down') setLayout('down');
+        if (action === 'close') {
+          const visible = [...document.querySelectorAll('.pane')].filter((pane) => pane.offsetParent !== null);
+          if (visible.length > 1) setLayout('single');
+          else closeMenu();
+        }
+      });
+
+      document.addEventListener('pointerdown', (event) => {
+        if (!menu.hidden && !menu.contains(event.target) && !event.target.closest('#menuButton')) closeMenu();
+      });
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeMenu();
+      });
+
+      const startDrag = (event, axis) => {
+        event.preventDefault();
+        const handle = event.currentTarget;
+        handle.setPointerCapture(event.pointerId);
+        handle.classList.add('dragging');
+        const move = (moveEvent) => {
+          const rect = workspace.getBoundingClientRect();
+          if (axis === 'vertical') {
+            const percent = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+            workspace.style.setProperty('--split-x', `${Math.max(28, Math.min(72, percent))}%`);
+          } else {
+            const percent = ((moveEvent.clientY - rect.top) / rect.height) * 100;
+            workspace.style.setProperty('--split-y', `${Math.max(28, Math.min(72, percent))}%`);
+          }
+        };
+        const stop = () => {
+          handle.classList.remove('dragging');
+          handle.removeEventListener('pointermove', move);
+          handle.removeEventListener('pointerup', stop);
+          handle.removeEventListener('pointercancel', stop);
+        };
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', stop);
+        handle.addEventListener('pointercancel', stop);
+      };
+      document.querySelector('[data-splitter="vertical"]').addEventListener('pointerdown', (event) => startDrag(event, 'vertical'));
+      document.querySelector('[data-splitter="horizontal"]').addEventListener('pointerdown', (event) => startDrag(event, 'horizontal'));
+    })();
+  </script>
+</body>
+</html>

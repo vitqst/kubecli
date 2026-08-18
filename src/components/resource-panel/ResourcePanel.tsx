@@ -3,7 +3,7 @@ import React, { useRef, useEffect, useCallback } from 'react';
 import { ResourceType, getResourceDefinition } from '../../resources';
 import { useResourceCache } from '../../contexts/ResourceCacheContext';
 import { LoadingProgress } from './LoadingProgress';
-import type { PanelState } from '../../hooks/useTabs';
+import type { PanelState } from '../../workspace/types';
 
 /**
  * Props for the ResourcePanel component.

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { Terminal } from '../components/Terminal';
+
+const xtermMocks = vi.hoisted(() => ({
+  getSelection: vi.fn().mockReturnValue(''),
+  clearSelection: vi.fn(),
+}));
 
 // Mock ResizeObserver which is not available in jsdom
 class MockResizeObserver {
@@ -21,8 +26,8 @@ vi.mock('xterm', () => {
     onData = vi.fn().mockReturnValue({ dispose: vi.fn() });
     attachCustomKeyEventHandler = vi.fn();
     loadAddon = vi.fn();
-    getSelection = vi.fn().mockReturnValue('');
-    clearSelection = vi.fn();
+    getSelection = xtermMocks.getSelection;
+    clearSelection = xtermMocks.clearSelection;
     focus = vi.fn();
     buffer = { active: {} };
     element = { clientWidth: 800, clientHeight: 600 };
@@ -68,6 +73,7 @@ describe('Terminal Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    xtermMocks.getSelection.mockReturnValue('');
     dataListener = null;
     exitListener = null;
 
@@ -321,7 +327,66 @@ describe('Terminal Component', () => {
     });
   });
 
+  describe('Context Menu', () => {
+    it('delegates terminal actions to the shared pane context menu', async () => {
+      const onContextMenuRequest = vi.fn();
+      const clipboard = {
+        writeText: vi.fn().mockResolvedValue(undefined),
+        readText: vi.fn().mockResolvedValue('paste me'),
+      };
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard });
+      xtermMocks.getSelection.mockReturnValue('selected output');
+      render(<Terminal id="test" onContextMenuRequest={onContextMenuRequest} />);
+      await waitFor(() => {
+        expect(mockInvoke).toHaveBeenCalledWith('terminal_create', expect.anything());
+      });
+
+      fireEvent.contextMenu(screen.getByTestId('terminal-surface-test'), {
+        clientX: 120,
+        clientY: 240,
+      });
+
+      expect(onContextMenuRequest).toHaveBeenCalledTimes(1);
+      const request = onContextMenuRequest.mock.calls[0][0];
+      expect(request).toMatchObject({ x: 120, y: 240, selection: 'selected output' });
+
+      await request.copySelection();
+      expect(clipboard.writeText).toHaveBeenCalledWith('selected output');
+      await request.paste();
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_write', {
+        terminalId: 'term_test_1',
+        data: 'paste me',
+      });
+      request.clearSelection();
+      expect(xtermMocks.clearSelection).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('Cleanup', () => {
+    it('closes late-created terminals and unregisters listeners resolved after unmount', async () => {
+      let resolveCreate!: (id: string) => void;
+      let resolveListen!: (unlisten: () => void) => void;
+      const lateUnlisten = vi.fn();
+      const createPromise = new Promise<string>((resolve) => { resolveCreate = resolve; });
+      const listenPromise = new Promise<() => void>((resolve) => { resolveListen = resolve; });
+      mockInvoke.mockImplementation((cmd: string) => cmd === 'terminal_create'
+        ? createPromise
+        : Promise.resolve());
+      mockListen.mockReturnValue(listenPromise);
+
+      const { unmount } = render(<Terminal id="late" />);
+      unmount();
+
+      await act(async () => {
+        resolveListen(lateUnlisten);
+        resolveCreate('term_late');
+        await Promise.resolve();
+      });
+
+      expect(lateUnlisten).toHaveBeenCalledTimes(2);
+      expect(mockInvoke).toHaveBeenCalledWith('terminal_close', { terminalId: 'term_late' });
+    });
+
     it('should unregister listeners on unmount', async () => {
       const { unmount } = render(<Terminal id="test" />);
 

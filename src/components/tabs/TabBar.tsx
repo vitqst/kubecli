@@ -1,11 +1,11 @@
 // src/components/tabs/TabBar.tsx
 import React from 'react';
-import { Tab } from '../../hooks/useTabs';
+import type { Tab } from '../../workspace/types';
 
 /**
  * Props for the TabBar component
  */
-interface TabBarProps {
+export interface TabBarProps {
   /** List of tabs to display */
   tabs: Tab[];
   /** ID of the currently active tab */
@@ -16,6 +16,7 @@ interface TabBarProps {
   onTabClose: (id: string) => void;
   /** Callback when the add tab button is clicked */
   onAddTab: () => void;
+  canCloseTabs?: boolean;
 }
 
 /**
@@ -28,21 +29,32 @@ export function TabBar({
   onTabClick,
   onTabClose,
   onAddTab,
+  canCloseTabs = false,
 }: TabBarProps) {
   return (
-    <div style={styles.tabBar}>
+    <div style={styles.tabBar} role="tablist" aria-label="Terminal tabs">
       {tabs.map(tab => (
         <div
           key={tab.id}
+          role="tab"
+          aria-label={tab.label}
+          aria-selected={tab.id === activeTabId}
+          tabIndex={tab.id === activeTabId ? 0 : -1}
           style={{
             ...styles.tab,
             ...(tab.id === activeTabId ? styles.activeTab : {}),
           }}
           onClick={() => onTabClick(tab.id)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onTabClick(tab.id);
+            }
+          }}
           title={tab.label}
         >
           <span style={styles.tabLabel}>{tab.label}</span>
-          {tab.id !== 'default' && (
+          {canCloseTabs && (
             <button
               style={styles.closeButton}
               onClick={(e) => {
@@ -50,6 +62,7 @@ export function TabBar({
                 onTabClose(tab.id);
               }}
               title="Close tab"
+              aria-label={`Close ${tab.label}`}
             >
               ×
             </button>
@@ -60,6 +73,7 @@ export function TabBar({
         style={styles.addButton}
         onClick={onAddTab}
         title="New terminal tab"
+        aria-label="New terminal tab"
       >
         +
       </button>
@@ -84,8 +98,18 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
     padding: '6px 12px',
     backgroundColor: '#2d2d2d',
-    border: '1px solid transparent',
-    borderBottom: 'none',
+    borderTopWidth: '1px',
+    borderRightWidth: '1px',
+    borderBottomWidth: 0,
+    borderLeftWidth: '1px',
+    borderTopStyle: 'solid',
+    borderRightStyle: 'solid',
+    borderBottomStyle: 'none',
+    borderLeftStyle: 'solid',
+    borderTopColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: 'transparent',
     borderRadius: '4px 4px 0 0',
     cursor: 'pointer',
     color: '#858585',
@@ -96,7 +120,9 @@ const styles: Record<string, React.CSSProperties> = {
   activeTab: {
     backgroundColor: '#1e1e1e',
     color: '#cccccc',
-    borderColor: '#3e3e42',
+    borderTopColor: '#3e3e42',
+    borderRightColor: '#3e3e42',
+    borderLeftColor: '#3e3e42',
   },
   tabLabel: {
     overflow: 'hidden',

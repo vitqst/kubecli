@@ -1,0 +1,35 @@
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: #181a1c; color: #d4d4d4; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }
+button { font: inherit; }
+
+.fixture-app { width: 100%; height: 100%; display: flex; flex-direction: column; background: #1e1e1e; }
+.fixture-topbar { height: 58px; flex: 0 0 58px; display: flex; align-items: center; gap: 26px; padding: 0 18px; border-bottom: 1px solid #3e3e42; background: #252526; }
+.fixture-brand { color: #4ec9b0; font-size: 15px; font-weight: 900; letter-spacing: .12em; }
+.fixture-config, .fixture-context { display: flex; align-items: center; gap: 9px; color: #d4d4d4; font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.fixture-config span, .fixture-context span { color: #7f858f; font: 800 9px/1 system-ui, sans-serif; letter-spacing: .08em; }
+.fixture-case { margin-left: auto; color: #889097; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.fixture-main { flex: 1; min-height: 0; display: flex; }
+.fixture-sidebar { width: 162px; flex: 0 0 162px; padding: 15px 11px; border-right: 1px solid #3e3e42; background: #252526; }
+.fixture-sidebar-label { padding: 0 8px 9px; color: #858585; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.fixture-sidebar-item { margin: 2px 0; padding: 8px 9px; border-radius: 4px; color: #aeb2b5; font-size: 12px; }
+.fixture-sidebar-item.active { background: #094771; color: white; }
+.fixture-content { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.fixture-workspace-stage { flex: 1; min-height: 0; position: relative; }
+.fixture-terminal { width: 100%; height: 100%; padding: 15px 17px; overflow: hidden; background: #1e1e1e; color: #cbd1d4; font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre; }
+.fixture-terminal-command { color: #8fe4d0; }
+.fixture-cursor { display: inline-block; width: 7px; height: 15px; margin-top: 2px; background: #d4d4d4; vertical-align: text-bottom; opacity: .9; }
+.fixture-resource-panel { flex: 0 0 196px; height: 196px; border-top: 1px solid #4a4d50; background: #252526; overflow: hidden; }
+.fixture-resource-heading { height: 43px; display: flex; align-items: center; gap: 16px; padding: 0 15px; border-bottom: 1px solid #3e3e42; font-size: 11px; }
+.fixture-resource-heading strong { color: #e0e0e0; letter-spacing: .08em; }
+.fixture-resource-heading span { color: #8e969c; }
+.fixture-resource-shared { margin-left: auto; color: #4ec9b0 !important; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.fixture-resource-row { display: grid; grid-template-columns: 1.15fr 2fr .7fr .9fr; align-items: center; min-height: 34px; padding: 0 16px; border-bottom: 1px solid #303236; color: #c7cbce; font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.fixture-resource-columns { min-height: 30px; color: #787f84; font-size: 9px; font-weight: 800; letter-spacing: .06em; }
+.fixture-running { color: #79d8a9; }
+
+.fixture-app .workspace-pane-header [role='tablist'] { background: transparent !important; }
+.fixture-app .workspace-pane--active { outline: none; }
+.fixture-app .workspace-pane--active::after { content: ''; position: absolute; inset: 0; z-index: 8; pointer-events: none; box-shadow: inset 0 0 0 2px #4ec9b0; }
+.fixture-app .workspace-context-menu { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
