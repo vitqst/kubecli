@@ -24,6 +24,7 @@ export const DEFAULT_PANEL_STATE: PanelState = {
 export interface Tab {
   id: TabId;
   label: string;
+  panelGroupId: string;
   resourceRef?: {
     type: ResourceType;
     name: string;

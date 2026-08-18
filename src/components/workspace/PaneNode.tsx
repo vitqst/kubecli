@@ -22,12 +22,6 @@ export interface PaneNodeProps {
     y: number,
     terminalRequest?: TerminalMenuRequest,
   ) => void;
-  renderTab: (
-    tab: Tab,
-    active: boolean,
-    paneId: PaneId,
-    onContextMenuRequest: (request: TerminalMenuRequest) => void,
-  ) => React.ReactNode;
 }
 
 function SplitPaneView(props: PaneNodeProps & { node: Extract<LayoutNode, { kind: 'split' }> }) {
@@ -73,7 +67,6 @@ function PaneLeafView({
   onCloseTab,
   onAddTab,
   onOpenContextMenu,
-  renderTab,
 }: Omit<PaneNodeProps, 'node'> & { pane: PaneLeaf }) {
   const paneTabs = pane.tabIds.map((tabId) => tabs[tabId]).filter(Boolean);
   const activeTab = tabs[pane.activeTabId] ?? paneTabs[0];
@@ -121,14 +114,10 @@ function PaneLeafView({
             <div
               key={tab.id}
               className="workspace-terminal-slot"
+              data-terminal-slot={tab.id}
               hidden={!active}
               aria-hidden={!active ? 'true' : undefined}
-            >
-              {renderTab(tab, active, pane.id, (request) => {
-                onFocusPane(pane.id);
-                onOpenContextMenu(pane.id, request.x, request.y, request);
-              })}
-            </div>
+            />
           );
         })}
       </div>

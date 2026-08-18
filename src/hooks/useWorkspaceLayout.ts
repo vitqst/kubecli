@@ -28,7 +28,7 @@ export interface UseWorkspaceLayoutOptions {
   idFactory?: WorkspaceIdFactory;
 }
 
-type NewTab = Omit<Tab, 'id' | 'panelState'>;
+type NewTab = Omit<Tab, 'id' | 'panelState' | 'panelGroupId'>;
 
 type WorkspaceAction =
   | { type: 'focus-pane'; paneId: PaneId }
@@ -58,8 +58,13 @@ const defaultIdFactory: WorkspaceIdFactory = {
   nextSplitId: () => `split_${++nextId}_${Date.now()}`,
 };
 
-function createTab(id: TabId, tab: NewTab): Tab {
-  return { ...tab, id, panelState: { ...DEFAULT_PANEL_STATE } };
+function createTab(
+  id: TabId,
+  tab: NewTab,
+  panelGroupId = id,
+  panelState: PanelState = DEFAULT_PANEL_STATE,
+): Tab {
+  return { ...tab, id, panelGroupId, panelState: { ...panelState } };
 }
 
 export function createInitialWorkspace(): WorkspaceState {
@@ -214,15 +219,15 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       if (!pane) return state;
       const tab = state.tabs[pane.activeTabId];
       if (!tab) return state;
+      const panelState = { ...tab.panelState, ...action.updater(tab.panelState) };
       return {
         ...state,
-        tabs: {
-          ...state.tabs,
-          [tab.id]: {
-            ...tab,
-            panelState: { ...tab.panelState, ...action.updater(tab.panelState) },
-          },
-        },
+        tabs: Object.fromEntries(Object.entries(state.tabs).map(([tabId, currentTab]) => [
+          tabId,
+          currentTab.panelGroupId === tab.panelGroupId
+            ? { ...currentTab, panelState }
+            : currentTab,
+        ])),
       };
     }
 
@@ -266,8 +271,17 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions = {}) {
   }, [idFactory, state.activePaneId]);
 
   const splitPane = useCallback((paneId: PaneId, direction: SplitNode['direction']) => {
+    const sourcePane = findLeaf(state.root, paneId);
+    if (!sourcePane) return null;
+    const sourceTab = state.tabs[sourcePane.activeTabId];
+    if (!sourceTab) return null;
     const tabId = idFactory.nextTabId();
-    const newTab = createTab(tabId, { label: 'Terminal' });
+    const newTab = createTab(
+      tabId,
+      { label: 'Terminal' },
+      sourceTab.panelGroupId,
+      sourceTab.panelState,
+    );
     const newPane: PaneLeaf = {
       kind: 'leaf',
       id: idFactory.nextPaneId(),
@@ -283,7 +297,7 @@ export function useWorkspaceLayout(options: UseWorkspaceLayoutOptions = {}) {
       newTab,
     });
     return { paneId: newPane.id, tabId };
-  }, [idFactory]);
+  }, [idFactory, state.root, state.tabs]);
 
   const updateActivePanelState = useCallback(
     (updater: (panel: PanelState) => Partial<PanelState>) => {

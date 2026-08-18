@@ -239,7 +239,7 @@ export function TerminalScreen({
     ...(runtimeAuthEnv.key === runtimeEnvKey ? runtimeAuthEnv.env : {}),
   }), [kubeconfigPath, selectedNamespace, runtimeAuthEnv, runtimeEnvKey]);
 
-  // Callback to update active tab's panel state
+  // Update the active tab's shared panel group. Split terminals reuse this state.
   const handlePanelStateChange = useCallback((updates: Partial<PanelState>) => {
     updateActivePanelState(() => updates);
   }, [updateActivePanelState]);
@@ -441,7 +441,7 @@ export function TerminalScreen({
               />
             </div>
 
-          {/* Resource Panel - now controlled, uses active tab's panel state */}
+          {/* One controlled ResourcePanel, backed by the active tab's shared panel group. */}
             <ResourcePanel
               panelState={activeTab.panelState}
               onPanelStateChange={handlePanelStateChange}

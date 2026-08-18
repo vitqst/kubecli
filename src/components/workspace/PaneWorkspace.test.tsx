@@ -8,6 +8,7 @@ import { PaneWorkspace } from './PaneWorkspace';
 const tab = (id: string, label: string): Tab => ({
   id,
   label,
+  panelGroupId: id,
   panelState: { ...DEFAULT_PANEL_STATE },
 });
 
@@ -111,8 +112,8 @@ describe('PaneWorkspace', () => {
   it('keeps inactive local tabs mounted but visually hidden', () => {
     renderWorkspace();
 
-    expect(screen.getByTestId('terminal-api').parentElement).not.toHaveAttribute('hidden');
-    expect(screen.getByTestId('terminal-debug').parentElement).toHaveAttribute('hidden');
+    expect(screen.getByTestId('terminal-api').closest('.workspace-terminal-slot')).not.toHaveAttribute('hidden');
+    expect(screen.getByTestId('terminal-debug').closest('.workspace-terminal-slot')).toHaveAttribute('hidden');
   });
 
   it('zooms one pane without unmounting sibling terminals', () => {

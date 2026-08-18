@@ -4,13 +4,30 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalScreen } from './TerminalScreen';
 import type { CachedResource } from '../../contexts/ResourceCacheContext';
 
-vi.mock('../Terminal', () => ({
-  Terminal: ({ id, pendingCommand }: { id: string; pendingCommand?: string | null }) => (
-    <div data-testid={`terminal-${id}`} data-pending-command={pendingCommand ?? ''}>
-      Terminal {id}
-    </div>
-  ),
+const terminalLifecycle = vi.hoisted(() => ({
+  mounts: [] as string[],
+  unmounts: [] as string[],
 }));
+
+vi.mock('../Terminal', async () => {
+  const React = await import('react');
+  return {
+    Terminal: ({ id, pendingCommand }: { id: string; pendingCommand?: string | null }) => {
+      React.useEffect(() => {
+        terminalLifecycle.mounts.push(id);
+        return () => {
+          terminalLifecycle.unmounts.push(id);
+        };
+      }, [id]);
+
+      return (
+        <div data-testid={`terminal-${id}`} data-pending-command={pendingCommand ?? ''}>
+          Terminal {id}
+        </div>
+      );
+    },
+  };
+});
 
 vi.mock('../../contexts/AuthSessionContext', () => ({
   useAuthSession: () => ({ status: { state: 'authenticated' } }),
@@ -58,8 +75,45 @@ const defaultProps: React.ComponentProps<typeof TerminalScreen> = {
 describe('TerminalScreen workspace integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    terminalLifecycle.mounts.length = 0;
+    terminalLifecycle.unmounts.length = 0;
     resourceCache.filterByNamespaces.mockReturnValue([]);
     resourceCache.filterByType.mockReturnValue([]);
+  });
+
+  it('keeps split PTY work linear by mounting only one terminal per split', () => {
+    render(<TerminalScreen {...defaultProps} />);
+
+    expect(terminalLifecycle.mounts).toEqual(['default']);
+    for (let split = 0; split < 6; split += 1) {
+      const activePane = screen
+        .getAllByRole('group', { name: 'Terminal pane Terminal' })
+        .find((pane) => pane.getAttribute('aria-current') === 'true');
+      expect(activePane).toBeDefined();
+
+      fireEvent.contextMenu(activePane!);
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Split Right' }));
+
+      expect(terminalLifecycle.mounts).toHaveLength(split + 2);
+      expect(new Set(terminalLifecycle.mounts)).toHaveProperty('size', split + 2);
+      expect(terminalLifecycle.unmounts).toEqual([]);
+    }
+  });
+
+  it('keeps one bottom resource panel visible across terminals split from the same tab', () => {
+    render(<TerminalScreen {...defaultProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Pods/ }));
+    expect(screen.getByPlaceholderText('Search pods...')).toBeInTheDocument();
+
+    fireEvent.contextMenu(screen.getByRole('group', { name: 'Terminal pane Terminal' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Split Right' }));
+
+    expect(screen.getAllByPlaceholderText('Search pods...')).toHaveLength(1);
+
+    const originalPane = screen.getAllByRole('group', { name: 'Terminal pane Terminal' })[0];
+    fireEvent.pointerDown(originalPane);
+    expect(screen.getAllByPlaceholderText('Search pods...')).toHaveLength(1);
   });
 
   it('splits the active pane and targets a pending command to that pane only', async () => {

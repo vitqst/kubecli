@@ -135,6 +135,7 @@ function PaneWorkspaceScreenshot() {
     Object.entries(fixture.tabs).map(([id, tab]) => [id, {
       id,
       label: tab.label,
+      panelGroupId: id,
       panelState: { ...DEFAULT_PANEL_STATE },
     }]),
   ));
@@ -187,7 +188,12 @@ function PaneWorkspaceScreenshot() {
                 setNextId((value) => value + 1);
                 setTabs((current) => ({
                   ...current,
-                  [tabId]: { id: tabId, label: 'Terminal', panelState: { ...DEFAULT_PANEL_STATE } },
+                  [tabId]: {
+                    id: tabId,
+                    label: 'Terminal',
+                    panelGroupId: tabId,
+                    panelState: { ...DEFAULT_PANEL_STATE },
+                  },
                 }));
                 setRoot((current) => updateLeaf(current, paneId, (pane) => ({
                   ...pane,
@@ -203,7 +209,12 @@ function PaneWorkspaceScreenshot() {
                 setNextId((value) => value + 1);
                 setTabs((current) => ({
                   ...current,
-                  [tabId]: { id: tabId, label: 'Terminal', panelState: { ...DEFAULT_PANEL_STATE } },
+                  [tabId]: {
+                    id: tabId,
+                    label: 'Terminal',
+                    panelGroupId: tabId,
+                    panelState: { ...DEFAULT_PANEL_STATE },
+                  },
                 }));
                 setRoot((current) => splitLeaf(
                   current,

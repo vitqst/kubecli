@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { collectLeaves, type LayoutNode, type PaneId, type TabId } from '../../workspace/layoutModel';
 import type { Tab } from '../../workspace/types';
 import { PaneNode } from './PaneNode';
@@ -26,6 +27,58 @@ export interface PaneWorkspaceProps {
   ) => React.ReactNode;
 }
 
+interface StableTabHostProps {
+  tab: Tab;
+  active: boolean;
+  paneId: PaneId;
+  layoutRevision: LayoutNode;
+  workspaceRef: React.RefObject<HTMLDivElement | null>;
+  onFocusPane: (paneId: PaneId) => void;
+  onOpenContextMenu: (
+    paneId: PaneId,
+    x: number,
+    y: number,
+    terminalRequest?: TerminalMenuRequest,
+  ) => void;
+  renderTab: PaneWorkspaceProps['renderTab'];
+}
+
+function StableTabHost({
+  tab,
+  active,
+  paneId,
+  layoutRevision,
+  workspaceRef,
+  onFocusPane,
+  onOpenContextMenu,
+  renderTab,
+}: StableTabHostProps) {
+  const [host] = useState(() => {
+    const element = document.createElement('div');
+    element.className = 'workspace-terminal-host';
+    return element;
+  });
+  const handleContextMenuRequest = useCallback((request: TerminalMenuRequest) => {
+    onFocusPane(paneId);
+    onOpenContextMenu(paneId, request.x, request.y, request);
+  }, [onFocusPane, onOpenContextMenu, paneId]);
+
+  useEffect(() => {
+    const slot = Array.from(
+      workspaceRef.current?.querySelectorAll<HTMLElement>('[data-terminal-slot]') ?? [],
+    ).find((candidate) => candidate.dataset.terminalSlot === tab.id);
+    if (!slot) return;
+    slot.appendChild(host);
+    return () => host.remove();
+  }, [host, layoutRevision, tab.id, workspaceRef]);
+
+  return createPortal(
+    renderTab(tab, active, paneId, handleContextMenuRequest),
+    host,
+    tab.id,
+  );
+}
+
 export function PaneWorkspace(props: PaneWorkspaceProps) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const focusAfterActionRef = useRef(false);
@@ -35,6 +88,20 @@ export function PaneWorkspace(props: PaneWorkspaceProps) {
     y: number;
     terminalRequest: TerminalMenuRequest | null;
   } | null>(null);
+  const visibleTabs = useMemo(() => collectLeaves(props.root).flatMap((pane) =>
+    pane.tabIds.flatMap((tabId) => {
+      const tab = props.tabs[tabId];
+      return tab ? [{ tab, paneId: pane.id, active: pane.activeTabId === tabId }] : [];
+    })), [props.root, props.tabs]);
+  const openContextMenu = useCallback((
+    paneId: PaneId,
+    x: number,
+    y: number,
+    terminalRequest?: TerminalMenuRequest,
+  ) => {
+    props.onFocusPane(paneId);
+    setContextMenu({ paneId, x, y, terminalRequest: terminalRequest ?? null });
+  }, [props.onFocusPane]);
 
   useEffect(() => {
     if (!focusAfterActionRef.current) return;
@@ -60,11 +127,21 @@ export function PaneWorkspace(props: PaneWorkspaceProps) {
           {...props}
           node={props.root}
           canCloseLastTab={collectLeaves(props.root).length > 1}
-          onOpenContextMenu={(paneId, x, y, terminalRequest) => {
-            props.onFocusPane(paneId);
-            setContextMenu({ paneId, x, y, terminalRequest: terminalRequest ?? null });
-          }}
+          onOpenContextMenu={openContextMenu}
         />
+        {visibleTabs.map(({ tab, paneId, active }) => (
+          <StableTabHost
+            key={tab.id}
+            tab={tab}
+            active={active}
+            paneId={paneId}
+            layoutRevision={props.root}
+            workspaceRef={workspaceRef}
+            onFocusPane={props.onFocusPane}
+            onOpenContextMenu={openContextMenu}
+            renderTab={props.renderTab}
+          />
+        ))}
       </div>
       {contextMenu && (
         <PaneContextMenu

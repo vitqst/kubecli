@@ -95,9 +95,9 @@ describe('useWorkspaceLayout', () => {
     expect(result.current.activePane.id).toBe('pane-default');
   });
 
-  it('updates resource panel state only for the focused pane active tab', () => {
+  it('keeps resource panel state isolated for independently created tabs', () => {
     const { result } = renderHook(() => useWorkspaceLayout({ idFactory: deterministicIds() }));
-    act(() => result.current.splitPane('pane-default', 'row'));
+    act(() => result.current.addTab({ label: 'independent' }));
 
     act(() => result.current.togglePanel('pod'));
 
@@ -106,5 +106,30 @@ describe('useWorkspaceLayout', () => {
       selectedResourceType: 'pod',
     });
     expect(result.current.tabs.default.panelState.isOpen).toBe(false);
+  });
+
+  it('shares resource panel state with terminals split from the same tab', () => {
+    const { result } = renderHook(() => useWorkspaceLayout({ idFactory: deterministicIds() }));
+
+    act(() => result.current.togglePanel('pod'));
+    act(() => result.current.splitPane('pane-default', 'row'));
+
+    expect(result.current.activeTab.panelState).toMatchObject({
+      isOpen: true,
+      selectedResourceType: 'pod',
+    });
+
+    act(() => result.current.updateActivePanelState(() => ({ searchQuery: 'api-server' })));
+    expect(result.current.tabs.default.panelState.searchQuery).toBe('api-server');
+
+    act(() => result.current.focusPane('pane-default'));
+    expect(result.current.activeTab.panelState.searchQuery).toBe('api-server');
+
+    act(() => result.current.addTab({ label: 'independent' }));
+    expect(result.current.activeTab.panelState).toMatchObject({
+      isOpen: false,
+      selectedResourceType: null,
+      searchQuery: '',
+    });
   });
 });

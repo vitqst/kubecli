@@ -33,7 +33,7 @@ A desktop application for managing Kubernetes contexts and running kubectl comma
 - **Unified Terminal Menu**: Terminal right-click keeps Copy, Paste, and Clear Selection above the pane actions
 - **Multi-Window Support**: Open multiple application windows for different kubeconfig files simultaneously
 - **Per-Context Terminals**: Create multiple terminal sessions for each context within a kubeconfig file
-- **Pane-Local Tabs**: Each pane owns its tabs, active terminal, resource-panel state, and command target
+- **Pane-Local Tabs**: Each pane owns its tabs, active terminal, and command target; split terminals reuse one bottom-panel state while independently added tabs remain isolated
 - **Isolated Sessions**: Each window maintains independent context, namespace, and terminal state
 - **Tab Navigation**: Keyboard shortcuts operate only on the focused pane
   - Ctrl/Cmd+Tab or Ctrl/Cmd+Shift+Tab: Navigate between local tabs
